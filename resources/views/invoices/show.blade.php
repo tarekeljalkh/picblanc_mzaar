@@ -170,10 +170,12 @@
                             <tbody>
                                 @foreach ($invoice->returnDetails as $return)
                                     @php
-                                        $cost =
-                                            $return->days_used *
+                                        $cost = $return->days_used *
                                             $return->returned_quantity *
                                             ($return->invoiceItem->price ?? ($return->additionalItem->price ?? 0));
+
+                                        $rentalStartDate = optional($return->invoiceItem)->rental_start_date ??
+                                            optional($return->additionalItem)->rental_start_date;
                                     @endphp
                                     <tr>
                                         <td>
@@ -181,10 +183,7 @@
                                         </td>
                                         <td>{{ $return->returned_quantity }}</td>
                                         <td>${{ number_format($cost, 2) }}</td>
-                                        @if ($invoice->category->name === 'daily')
-                                            <td>{{ optional($return->invoiceItem->rental_start_date)->format('d/m/Y h:i A') ?? optional($return->additionalItem->rental_start_date)->format('d/m/Y h:i A') }}
-                                            </td>
-                                        @endif
+                                        <td>{{ optional($rentalStartDate)->format('d/m/Y h:i A') }}</td>
                                         <td>{{ optional($return->return_date)->format('d/m/Y h:i A') }}</td>
                                         @if ($invoice->category->name === 'daily')
                                             <td>{{ $return->days_used }}</td>
@@ -192,6 +191,7 @@
                                     </tr>
                                 @endforeach
                             </tbody>
+
                         </table>
                     </div>
                 @endif
