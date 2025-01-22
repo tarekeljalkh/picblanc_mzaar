@@ -1,0 +1,35 @@
+daily and season as categories and in the trial balance each one is different
+
+
+send invoice via whatsapp
+
+Update Process:
+
+* email remove
+* rename product - > brand to :  product - > descirption
+* product->stock remove
+* remove discount and vat from each item
+* rename cost in Invoice -> Unit price
+* invoice # -> rental agreement
+* remove vat from invoice table
+* remove discount from invoice table
+* each invoice total will be multiple by days of rentals
+* payment methods , cash or credit card
+* 3 dates , now , rental date,
+* notes in invoices
+* make filter invoices by date
+* balance by item, balance by invoice
+* items returns and additional items on invoice
+* POS product image removed
+* changed cart background to white
+
+New Updates:
+broken items in trial balance
+
+done:
+- categories : daily and seasons
+- create new customer from pos
+- remove vat from invoice
+- in products show returned quantities
+- paid and unpaid in edit
+- add credit card to trial balance

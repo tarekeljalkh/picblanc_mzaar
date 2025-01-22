@@ -1,0 +1,21 @@
+i want to make a ski equipments rental system, the system will be offline for now (but maybe after some years will make it online), multiple users will use this system on his own pc or laptop, the the system will be veryyy simple to use with very simple gui, i want the user to open an invoice, with ready made form, and in the center will add the products (ski, skateboard - quantity - brand - price and ofcourse at last there is vat and discount and total, and the user can select already made clients and scan their ids, each product will have an add and delete javascript, so when the admin click on add it will display a new row to add products, and if delete it will delete specific row
+
+
+// Success message
+return redirect()->route('customers.index')->with('success', 'Customer created successfully.');
+
+// Error message
+return redirect()->route('customers.index')->with('error', 'There was an issue creating the customer.');
+
+// Warning message
+return redirect()->route('customers.index')->with('warning', 'This is a warning message.');
+
+// Info message
+return redirect()->route('customers.index')->with('info', 'Here is some information for you.');
+
+
+php artisan serve --host=192.168.100.238 --port=8000
+
+
+manage returns should have also additional items,
+and create invoice customer should have a deposit card to scan
