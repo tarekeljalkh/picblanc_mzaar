@@ -4905,7 +4905,7 @@ fieldset:disabled .btn {
     --bs-card-spacer-y: 1.5rem;
     --bs-card-spacer-x: 1.5rem;
     --bs-card-title-spacer-y: 0.5rem;
-    --bs-card-title-color: #384551;
+    --bs-card-title-color: #000000;
     --bs-card-subtitle-color: #858d95;
     --bs-card-border-width: 0;
     --bs-card-border-color: #e4e6e8;
