@@ -80,9 +80,10 @@ class POSController extends Controller
             foreach ($request->cart as $cartItem) {
                 $quantity = $cartItem['quantity'];
                 $price = $cartItem['price'];
-                $totalPrice = ($categoryName === 'daily')
-                    ? $quantity * $price * $request->rental_days
-                    : $quantity * $price;
+                // ✅ Adjusted Price Calculation
+                $totalPrice = ($categoryName === 'daily' && empty($cartItem['id']))
+                    ? $quantity * $price * $request->rental_days // For custom items
+                    : (($categoryName === 'daily') ? $quantity * $price * $request->rental_days : $quantity * $price); // For products
 
                 if (!empty($cartItem['id'])) {
                     $product = Product::findOrFail($cartItem['id']);
@@ -98,11 +99,15 @@ class POSController extends Controller
                         'added_quantity' => 0,
                     ]);
                 } else {
+                    // ✅ Custom Item with Rental Dates
                     $customItems[] = new CustomItem([
                         'name' => $cartItem['name'],
                         'description' => $cartItem['description'] ?? '',
                         'price' => $price,
                         'quantity' => $quantity,
+                        'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
+                        'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
+                        'days' => $categoryName === 'daily' ? $request->rental_days : null,
                     ]);
                 }
 

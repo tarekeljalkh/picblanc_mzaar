@@ -85,12 +85,10 @@
                     </div>
                 @endif
 
-                @if (session('category') === 'season')
                     <button class="btn btn-primary w-100 mt-3" data-bs-toggle="modal" data-bs-target="#addCustomItemModal">
                         Add Custom Product
                     </button>
                     <br><br>
-                @endif
 
                 <!-- Discount, and Total Amount -->
                 <div class="mb-3">

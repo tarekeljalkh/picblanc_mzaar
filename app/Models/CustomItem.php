@@ -15,6 +15,11 @@ class CustomItem extends Model
         'description',
         'price',
         'quantity',
+        'returned_quantity',
+        'status',
+        'rental_start_date',
+        'rental_end_date',
+        'days',
     ];
 
     public function invoice()

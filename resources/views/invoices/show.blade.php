@@ -98,11 +98,19 @@
                                     <td class="text-nowrap text-heading">{{ $customItem->name }}</td>
                                     <td>${{ number_format($customItem->price, 2) }}</td>
                                     <td>{{ $customItem->quantity }}</td>
-                                    <td>${{ number_format($customItem->price * $customItem->quantity, 2) }}</td>
+
+                                    {{-- ✅ Calculate total price based on rental days for "daily" category --}}
+                                    <td>
+                                        ${{ number_format($customItem->price * $customItem->quantity * ($invoice->category->name === 'daily' ? $invoice->days : 1), 2) }}
+                                    </td>
+
+                                    {{-- ✅ Display rental dates for "daily" category --}}
                                     @if ($invoice->category->name === 'daily')
-                                        <td>N/A</td>
-                                        <td>N/A</td>
-                                        <td>N/A</td>
+                                        <td>{{ $invoice->rental_start_date->format('d/m/Y h:i A') }}</td>
+                                        {{-- From Date --}}
+                                        <td>{{ $invoice->rental_end_date->format('d/m/Y h:i A') }}</td>
+                                        {{-- To Date --}}
+                                        <td>{{ $invoice->days }}</td> {{-- Total Days --}}
                                     @endif
                                 </tr>
                             @endforeach
@@ -170,14 +178,20 @@
                             <tbody>
                                 @foreach ($invoice->returnDetails as $return)
                                     @php
-                                        $cost =
-                                            $return->days_used *
-                                            $return->returned_quantity *
-                                            ($return->invoiceItem->price ?? ($return->additionalItem->price ?? 0));
+                                        $pricePerDay = $return->invoiceItem
+                                            ? $return->invoiceItem->price
+                                            : ($return->additionalItem
+                                                ? $return->additionalItem->price
+                                                : ($return->customItem
+                                                    ? $return->customItem->price
+                                                    : 0)); // ✅ Added custom item handling
+
+                                        $cost = $return->days_used * $return->returned_quantity * $pricePerDay;
 
                                         $rentalStartDate =
                                             optional($return->invoiceItem)->rental_start_date ??
-                                            optional($return->additionalItem)->rental_start_date;
+                                            (optional($return->additionalItem)->rental_start_date ??
+                                                optional($return->customItem->invoice)->rental_start_date); // ✅ Added custom item rental date
                                     @endphp
                                     <tr>
                                         <td>

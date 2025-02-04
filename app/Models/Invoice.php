@@ -189,76 +189,87 @@ class Invoice extends Model
     {
         $isSeasonal = $this->category->name === 'season';
 
-        // Subtotal: Includes all items (regular items, custom items)
+        // ✅ Subtotal: Includes regular items and custom items
         $subtotalForDiscount = $this->items->sum(function ($item) use ($isSeasonal) {
             return $isSeasonal
                 ? $item->price * $item->quantity
                 : $item->price * $item->quantity * ($item->days ?? 1);
-        }) + $this->customItems->sum(function ($customItem) {
-            return $customItem->price * $customItem->quantity;
+        }) + $this->customItems->sum(function ($customItem) use ($isSeasonal) {
+            return $isSeasonal
+                ? $customItem->price * $customItem->quantity
+                : $customItem->price * $customItem->quantity * ($this->days ?? 1); // ✅ Multiply by days if daily
         });
 
-        // Additional Items Cost
+        // ✅ Additional Items Cost
         $additionalItemsCost = $this->additionalItems->sum(function ($additionalItem) {
             return $additionalItem->price * $additionalItem->quantity * ($additionalItem->days ?? 1);
         });
 
-        // Total Subtotal: Includes regular items, custom items, and additional items
+        // ✅ Total Subtotal (regular items + custom items + additional items)
         $totalSubtotal = $subtotalForDiscount + $additionalItemsCost;
 
-        // Discount: Applied only to the items eligible for discount (regular items + custom items)
+        // ✅ Discount Calculation
         $discountPercentage = $this->total_discount ?? 0;
         $discountAmount = ($subtotalForDiscount * $discountPercentage) / 100;
 
-        // Returned Items Cost: Cost for used days of returned items
+        // ✅ Returned Items Cost: Handles regular, additional, and custom items
         $returnedItemsCost = $this->returnDetails->sum(function ($return) {
             $pricePerDay = $return->invoiceItem
                 ? $return->invoiceItem->price
-                : ($return->additionalItem ? $return->additionalItem->price : 0);
+                : ($return->additionalItem
+                    ? $return->additionalItem->price
+                    : ($return->customItem ? $return->customItem->price : 0)); // ✅ Handle custom items
 
             return $return->days_used * $return->returned_quantity * $pricePerDay;
         });
 
-        // Refund for Unused Days: Optional refund calculation
+        // ✅ Refund for Unused Days (Handles custom items as well)
         $refundForUnusedDays = $this->returnDetails->sum(function ($return) {
             $totalDays = $return->invoiceItem
                 ? ($return->invoiceItem->days ?? 1)
-                : ($return->additionalItem ? $return->additionalItem->days : 1);
+                : ($return->additionalItem
+                    ? $return->additionalItem->days
+                    : ($return->customItem ? $return->customItem->invoice->days : 1)); // ✅ Handle custom items
 
             $unusedDays = $totalDays - $return->days_used;
 
             $pricePerDay = $return->invoiceItem
                 ? $return->invoiceItem->price
-                : ($return->additionalItem ? $return->additionalItem->price : 0);
+                : ($return->additionalItem
+                    ? $return->additionalItem->price
+                    : ($return->customItem ? $return->customItem->price : 0)); // ✅ Handle custom items
 
             return max(0, $unusedDays) * $return->returned_quantity * $pricePerDay;
         });
 
-        // Total after discount and before deductions
+        // ✅ Total after applying discount
         $totalAfterDiscount = $totalSubtotal - $discountAmount;
 
-        // Final Total: Includes everything
+        // ✅ Final Total Calculation
         $finalTotal = $totalAfterDiscount;
 
-        // Balance Due: Amount still owed (does not account for returned items unless refunded)
+        // ✅ Balance Due Calculation
         $totalPaid = $this->deposit + $this->paid_amount;
         $balanceDue = max(0, $finalTotal - $totalPaid);
 
-            // Your "final total" definition
-    $finalTotalCustom = $subtotalForDiscount + $additionalItemsCost - $refundForUnusedDays - $discountAmount - $totalPaid;
+        // ✅ Custom Final Total (For display purposes)
+        $finalTotalCustom = $subtotalForDiscount + $additionalItemsCost - $refundForUnusedDays - $discountAmount - $totalPaid;
 
+        // ✅ Returning all calculated totals
         return [
-            'subtotal' => round($totalSubtotal, 2), // Total of all items including additional items
-            'subtotalForDiscount' => round($subtotalForDiscount, 2), // Discounted items subtotal
-            'additionalItemsCost' => round($additionalItemsCost, 2), // Additional items cost
-            'discountAmount' => round($discountAmount, 2), // Discount amount
-            'returnedItemsCost' => round($returnedItemsCost, 2), // Returned items cost
-            'refundForUnusedDays' => round($refundForUnusedDays, 2), // Refund for unused days
-            'finalTotal' => round($finalTotal, 2), // Final total after adjustments
-            'finalTotalCustom' => round($finalTotalCustom, 2), // New custom final total
-            'balanceDue' => round(max(0, $finalTotal - $totalPaid - $refundForUnusedDays), 2), // Remaining balance adjusted
+            'subtotal' => round($totalSubtotal, 2),               // Total of all items including additional items
+            'subtotalForDiscount' => round($subtotalForDiscount, 2), // Subtotal eligible for discount
+            'additionalItemsCost' => round($additionalItemsCost, 2), // Cost of additional items
+            'discountAmount' => round($discountAmount, 2),        // Discount amount
+            'returnedItemsCost' => round($returnedItemsCost, 2),  // Cost for returned items (includes custom items)
+            'refundForUnusedDays' => round($refundForUnusedDays, 2), // Refund for unused rental days
+            'finalTotal' => round($finalTotal, 2),                // Final total after all adjustments
+            'finalTotalCustom' => round($finalTotalCustom, 2),    // Custom final total for display
+            'balanceDue' => round(max(0, $finalTotal - $totalPaid - $refundForUnusedDays), 2), // Remaining balance due
         ];
     }
+
+
 
 
     // public function calculateTotals()
@@ -274,10 +285,13 @@ class Invoice extends Model
     //         return $customItem->price * $customItem->quantity;
     //     });
 
-    //     // Subtotal: Includes all items (regular items, custom items, additional items)
-    //     $totalSubtotal = $subtotalForDiscount + $this->additionalItems->sum(function ($additionalItem) {
+    //     // Additional Items Cost
+    //     $additionalItemsCost = $this->additionalItems->sum(function ($additionalItem) {
     //         return $additionalItem->price * $additionalItem->quantity * ($additionalItem->days ?? 1);
     //     });
+
+    //     // Total Subtotal: Includes regular items, custom items, and additional items
+    //     $totalSubtotal = $subtotalForDiscount + $additionalItemsCost;
 
     //     // Discount: Applied only to the items eligible for discount (regular items + custom items)
     //     $discountPercentage = $this->total_discount ?? 0;
@@ -310,23 +324,29 @@ class Invoice extends Model
     //     // Total after discount and before deductions
     //     $totalAfterDiscount = $totalSubtotal - $discountAmount;
 
-    //     // Final Total: Does not deduct returned items cost (for reporting purposes)
+    //     // Final Total: Includes everything
     //     $finalTotal = $totalAfterDiscount;
 
     //     // Balance Due: Amount still owed (does not account for returned items unless refunded)
     //     $totalPaid = $this->deposit + $this->paid_amount;
     //     $balanceDue = max(0, $finalTotal - $totalPaid);
 
+    //     // Your "final total" definition
+    //     $finalTotalCustom = $subtotalForDiscount + $additionalItemsCost - $refundForUnusedDays - $discountAmount - $totalPaid;
+
     //     return [
-    //         'subtotal' => round($totalSubtotal, 2), // All items subtotal
+    //         'subtotal' => round($totalSubtotal, 2), // Total of all items including additional items
     //         'subtotalForDiscount' => round($subtotalForDiscount, 2), // Discounted items subtotal
+    //         'additionalItemsCost' => round($additionalItemsCost, 2), // Additional items cost
     //         'discountAmount' => round($discountAmount, 2), // Discount amount
     //         'returnedItemsCost' => round($returnedItemsCost, 2), // Returned items cost
     //         'refundForUnusedDays' => round($refundForUnusedDays, 2), // Refund for unused days
     //         'finalTotal' => round($finalTotal, 2), // Final total after adjustments
+    //         'finalTotalCustom' => round($finalTotalCustom, 2), // New custom final total
     //         'balanceDue' => round(max(0, $finalTotal - $totalPaid - $refundForUnusedDays), 2), // Remaining balance adjusted
     //     ];
     // }
+
 
     public function getReturnedAttribute()
     {
