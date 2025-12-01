@@ -8,7 +8,8 @@
 
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ route('dashboard') }}"><i class="bx bx-home"></i> Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('dashboard') }}"><i class="bx bx-home"></i> Dashboard</a>
+                    </li>
                     <li class="breadcrumb-item active" aria-current="page">Profile</li>
                 </ol>
             </nav>
@@ -25,14 +26,16 @@
                         <div class="row g-4">
                             <div class="col-md-6">
                                 <label for="name" class="form-label">Name</label>
-                                <input type="text" id="name" name="name" class="form-control" value="{{ old('name', auth()->user()->name) }}" required />
+                                <input type="text" id="name" name="name" class="form-control"
+                                    value="{{ old('name', auth()->user()->name) }}" required />
                                 @error('name')
                                     <div class="text-danger mt-2">{{ $message }}</div>
                                 @enderror
                             </div>
                             <div class="col-md-6">
                                 <label for="email" class="form-label">Email</label>
-                                <input type="email" id="email" name="email" class="form-control" value="{{ old('email', auth()->user()->email) }}" required />
+                                <input type="email" id="email" name="email" class="form-control"
+                                    value="{{ old('email', auth()->user()->email) }}" required />
                                 @error('email')
                                     <div class="text-danger mt-2">{{ $message }}</div>
                                 @enderror
@@ -57,21 +60,24 @@
                         <div class="row g-4">
                             <div class="col-md-6">
                                 <label for="current_password" class="form-label">Current Password</label>
-                                <input type="password" id="current_password" name="current_password" class="form-control" autocomplete="current-password" required />
+                                <input type="password" id="current_password" name="current_password" class="form-control"
+                                    autocomplete="current-password" required />
                                 @error('current_password')
                                     <div class="text-danger mt-2">{{ $message }}</div>
                                 @enderror
                             </div>
                             <div class="col-md-6">
                                 <label for="password" class="form-label">New Password</label>
-                                <input type="password" id="password" name="password" class="form-control" autocomplete="new-password" required />
+                                <input type="password" id="password" name="password" class="form-control"
+                                    autocomplete="new-password" required />
                                 @error('password')
                                     <div class="text-danger mt-2">{{ $message }}</div>
                                 @enderror
                             </div>
                             <div class="col-md-6">
                                 <label for="password_confirmation" class="form-label">Confirm New Password</label>
-                                <input type="password" id="password_confirmation" name="password_confirmation" class="form-control" required />
+                                <input type="password" id="password_confirmation" name="password_confirmation"
+                                    class="form-control" required />
                                 @error('password_confirmation')
                                     <div class="text-danger mt-2">{{ $message }}</div>
                                 @enderror
@@ -86,44 +92,40 @@
             </div>
 
             <!-- Create New Year Database -->
-<div class="card mb-6 mt-5">
-    <h5 class="card-header">Create New Year Database</h5>
-    <div class="card-body">
-        <form method="POST" action="{{ route('year.create') }}" class="pt-3">
-            @csrf
 
-            <div class="row g-4">
-                <div class="col-md-6">
-                    <label for="year" class="form-label">New Year</label>
-                    <input
-                        type="number"
-                        id="year"
-                        name="year"
-                        min="{{ date('Y') }}"
-                        class="form-control @error('year') is-invalid @enderror"
-                        placeholder="{{ date('Y') + 1 }}"
-                        required
-                    />
-                    @error('year')
-                        <div class="text-danger mt-2">{{ $message }}</div>
-                    @enderror
+            @if (auth()->user()->is_admin)
+                <div class="card mb-6 mt-5">
+                    <h5 class="card-header">Create New Year Database</h5>
+                    <div class="card-body">
+                        <form method="POST" action="{{ route('year.create') }}" class="pt-3">
+                            @csrf
+
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label for="year" class="form-label">New Year</label>
+                                    <input type="number" id="year" name="year" min="{{ date('Y') }}"
+                                        class="form-control @error('year') is-invalid @enderror"
+                                        placeholder="{{ date('Y') + 1 }}" required />
+                                    @error('year')
+                                        <div class="text-danger mt-2">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="col-md-6 d-flex align-items-end">
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="bx bx-duplicate"></i> Create New Year
+                                    </button>
+                                </div>
+                            </div>
+
+                            <small class="text-muted d-block mt-3">
+                                This will duplicate the current database, keep customers & products, and
+                                reset invoices & related tables for the new year.
+                            </small>
+                        </form>
+                    </div>
                 </div>
-
-                <div class="col-md-6 d-flex align-items-end">
-                    <button type="submit" class="btn btn-success">
-                        <i class="bx bx-duplicate"></i> Create New Year
-                    </button>
-                </div>
-            </div>
-
-            <small class="text-muted d-block mt-3">
-                This will duplicate the current database, keep customers & products, and
-                reset invoices & related tables for the new year.
-            </small>
-        </form>
-    </div>
-</div>
-
+            @endif
 
             <!-- Delete Account Section -->
             {{-- <div class="card mb-6">

@@ -18,14 +18,19 @@ class YearController extends Controller
             return redirect()->back()->with('error', 'Invalid year format.');
         }
 
-        // Save active year in a cookie for 1 year
+        // Remove old cookie (optional but recommended)
+        $forgetCookie = cookie()->forget('active_year');
+
+        // Save new active year in a cookie for 1 year
         $cookie = cookie('active_year', $year, 60 * 24 * 365);
 
         return redirect()
             ->route('dashboard')
+            ->withCookie($forgetCookie)
             ->withCookie($cookie)
             ->with('success', "Switched to year $year successfully!");
     }
+
 
     /**
      * Create a new year DB
