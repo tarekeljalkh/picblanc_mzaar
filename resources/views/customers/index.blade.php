@@ -49,12 +49,12 @@
                                         <a href="{{ route('customers.rentalDetails', $customer->id) }}"
                                             class="btn btn-sm btn-info">View Rentals</a>
                                     @endif
-                                    @if (auth()->user()->role === 'admin')
+                                    {{-- @if (auth()->user()->role === 'admin') --}}
                                         <a href="{{ route('customers.edit', $customer->id) }}"
                                             class="btn btn-sm btn-warning">Edit</a>
                                         <a href="{{ route('customers.destroy', $customer->id) }}"
                                             class="btn btn-sm btn-danger delete-item">Delete</a>
-                                    @endif
+                                    {{-- @endif --}}
                                 </td>
                             </tr>
                         @endforeach

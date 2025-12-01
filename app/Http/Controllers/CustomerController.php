@@ -156,13 +156,26 @@ class CustomerController extends Controller
 
         // Start building the invoices query
         $invoicesQuery = Invoice::where('customer_id', $id)
-            ->with(['items.product', 'returnDetails.product']); // Eager-load necessary relationships
+            ->with([
+                'invoiceItems.product',  // ✅ Fix incorrect relationship
+                'customItems',           // ✅ Include custom items
+                'additionalItems',       // ✅ Include additional items
+                'returnDetails.invoiceItem.product' // ✅ Fix return details relation
+            ]);
 
-        // Apply date filtering if provided
+        // Apply date filtering based on rental period, not `created_at`
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
             $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
-            $invoicesQuery->whereBetween('created_at', [$startDate, $endDate]);
+
+            $invoicesQuery->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('rental_start_date', [$startDate, $endDate])
+                      ->orWhereBetween('rental_end_date', [$startDate, $endDate])
+                      ->orWhere(function ($q) use ($startDate, $endDate) {
+                          $q->where('rental_start_date', '<=', $endDate)
+                            ->where('rental_end_date', '>=', $startDate);
+                      });
+            });
         }
 
         // Execute the query to get invoices

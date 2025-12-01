@@ -29,7 +29,7 @@
 
                     <!-- Invoices Card -->
                     <div class="col-md-6 col-lg-6">
-                        <a href="{{ route('invoices.index', ['start_date' => '2024-01-01', 'end_date' => '2090-01-01']) }}"
+                        <a href="{{ route('invoices.index') }}"
                             class="text-decoration-none">
                             <div class="card shadow-sm h-100">
                                 <div class="card-body d-flex align-items-center">
@@ -49,7 +49,7 @@
 
                     <!-- Paid Invoices Card -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="{{ route('invoices.index', ['start_date' => '2024-01-01', 'end_date' => '2090-01-01', 'payment_status' => 'fully_paid']) }}"
+                        <a href="{{ route('invoices.index', ['payment_status' => 'fully_paid']) }}"
                             class="text-decoration-none">
                             <div class="card shadow-sm h-100">
                                 <div class="card-body d-flex align-items-center">
@@ -69,7 +69,7 @@
 
                     <!-- Partially Paid Invoices Card -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="{{ route('invoices.index', ['start_date' => '2024-01-01', 'end_date' => '2090-01-01', 'payment_status' => 'partially_paid']) }}"
+                        <a href="{{ route('invoices.index', ['payment_status' => 'partially_paid']) }}"
                             class="text-decoration-none">
                             <div class="card shadow-sm h-100">
                                 <div class="card-body d-flex align-items-center">
@@ -89,7 +89,7 @@
 
                     <!-- Unpaid Invoices Card -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="{{ route('invoices.index', ['start_date' => '2024-01-01', 'end_date' => '2090-01-01', 'payment_status' => 'unpaid']) }}"
+                        <a href="{{ route('invoices.index', ['payment_status' => 'unpaid']) }}"
                             class="text-decoration-none">
                             <div class="card shadow-sm h-100">
                                 <div class="card-body d-flex align-items-center">
@@ -109,7 +109,7 @@
 
                     <!-- Not Returned Invoices Card -->
                     <div class="col-md-6 col-lg-6">
-                        <a href="{{ route('invoices.index', ['start_date' => '2024-01-01', 'end_date' => '2090-01-01', 'status' => 'not_returned']) }}"
+                        <a href="{{ route('invoices.index', ['status' => 'not_returned']) }}"
                             class="text-decoration-none">
                             <div class="card shadow-sm h-100">
                                 <div class="card-body d-flex align-items-center">
@@ -129,7 +129,7 @@
 
                     <!-- Returned Invoices Card -->
                     <div class="col-md-6 col-lg-6">
-                        <a href="{{ route('invoices.index', ['start_date' => '2024-01-01', 'end_date' => '2090-01-01', 'status' => 'returned']) }}"
+                        <a href="{{ route('invoices.index', ['status' => 'returned']) }}"
                             class="text-decoration-none">
                             <div class="card shadow-sm h-100">
                                 <div class="card-body d-flex align-items-center">

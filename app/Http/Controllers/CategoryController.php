@@ -15,8 +15,10 @@ class CategoryController extends Controller
         // Set the category in the session
         session(['category' => $validated['category']]);
 
+        // Redirect back to dashboard to prevent conflicts with a success message
+        return redirect()->route('dashboard')->with('success', ucfirst($validated['category']) . ' category selected successfully.');
         // Redirect back with a success message
-        return redirect()->back()->with('success', ucfirst($validated['category']) . ' category selected successfully.');
+        // return redirect()->back()->with('success', ucfirst($validated['category']) . ' category selected successfully.');
     }
 
     /**

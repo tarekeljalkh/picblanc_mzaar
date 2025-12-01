@@ -41,26 +41,20 @@ class InvoiceSeeder extends Seeder
             'customer_id' => $customer1->id,
             'category_id' => $dailyCategory->id, // Associating with daily category
             'user_id' => $user->id,
-            'payment_method' => 'cash',
             'rental_start_date' => $startDate1->format('Y-m-d'),
             'rental_end_date' => $endDate1->format('Y-m-d'),
             'days' => $days1,
             'total_discount' => 5,
-            'total_amount' => (100 * $days1) * 1.1 * 0.95,
-            'status' => 'draft'
         ]);
 
         Invoice::create([
             'customer_id' => $customer2->id,
             'category_id' => $seasonCategory->id, // Associating with season category
             'user_id' => $user->id,
-            'payment_method' => 'credit_card',
             'rental_start_date' => $startDate2->format('Y-m-d'),
             'rental_end_date' => $endDate2->format('Y-m-d'),
             'days' => $days2,
             'total_discount' => 3,
-            'total_amount' => (150 * $days2) * 1.08 * 0.97,
-            'status' => 'returned'
         ]);
     }
 }

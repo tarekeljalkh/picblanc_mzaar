@@ -85,6 +85,46 @@
                 </div>
             </div>
 
+            <!-- Create New Year Database -->
+<div class="card mb-6 mt-5">
+    <h5 class="card-header">Create New Year Database</h5>
+    <div class="card-body">
+        <form method="POST" action="{{ route('year.create') }}" class="pt-3">
+            @csrf
+
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <label for="year" class="form-label">New Year</label>
+                    <input
+                        type="number"
+                        id="year"
+                        name="year"
+                        min="{{ date('Y') }}"
+                        class="form-control @error('year') is-invalid @enderror"
+                        placeholder="{{ date('Y') + 1 }}"
+                        required
+                    />
+                    @error('year')
+                        <div class="text-danger mt-2">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="col-md-6 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success">
+                        <i class="bx bx-duplicate"></i> Create New Year
+                    </button>
+                </div>
+            </div>
+
+            <small class="text-muted d-block mt-3">
+                This will duplicate the current database, keep customers & products, and
+                reset invoices & related tables for the new year.
+            </small>
+        </form>
+    </div>
+</div>
+
+
             <!-- Delete Account Section -->
             {{-- <div class="card mb-6">
                 <h5 class="card-header">Delete Account</h5>

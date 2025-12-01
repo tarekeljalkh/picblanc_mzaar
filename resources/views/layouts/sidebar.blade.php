@@ -101,8 +101,7 @@
             </a>
         </li>
 
-        <!-- Drafts -->
-        <!-- Drafts -->
+        {{-- <!-- Drafts -->
         <li class="menu-item {{ Route::is('drafts.index') ? 'active' : '' }}">
             <a href="{{ route('drafts.index') }}" class="menu-link">
                 <i class="menu-icon tf-icons bx bx-trash text-danger"></i> <!-- Changed icon and color to red -->
@@ -111,7 +110,7 @@
                 <!-- Changed badge color to red -->
             </a>
         </li>
-
+ --}}
         <!-- Balance -->
         <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Balance</span>

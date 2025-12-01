@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\CustomItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\InvoicePayment;
 use App\Models\Product;
 use App\Traits\FileUploadTrait;
 use Carbon\Carbon;
@@ -80,6 +81,7 @@ class POSController extends Controller
             foreach ($request->cart as $cartItem) {
                 $quantity = $cartItem['quantity'];
                 $price = $cartItem['price'];
+
                 // ✅ Adjusted Price Calculation
                 $totalPrice = ($categoryName === 'daily' && empty($cartItem['id']))
                     ? $quantity * $price * $request->rental_days // For custom items
@@ -130,9 +132,6 @@ class POSController extends Controller
                 'category_id' => $category->id,
                 'total_discount' => $totalDiscount,
                 'deposit' => $deposit,
-                'total_amount' => $totalAmount,
-                'paid_amount' => $paymentAmount,
-                'payment_method' => $request->payment_method,
                 'note' => $request->note,
             ];
 
@@ -145,7 +144,7 @@ class POSController extends Controller
             $invoice = Invoice::create($invoiceData);
 
             if (!empty($invoiceItems)) {
-                $invoice->items()->saveMany($invoiceItems);
+                $invoice->invoiceItems()->saveMany($invoiceItems);
             }
 
             if (!empty($customItems)) {
@@ -154,6 +153,17 @@ class POSController extends Controller
                     $item->save();
                 }
             }
+
+            // Create payment record if payment is made
+            if ($request->filled('payment_amount') && $request->payment_amount > 0) {
+                InvoicePayment::create([
+                    'invoice_id' => $invoice->id,
+                    'amount' => $request->payment_amount,
+                    'payment_method' => $request->payment_method,
+                    'payment_date' => now(),
+                ]);
+            }
+
 
             DB::commit();
 
@@ -169,138 +179,6 @@ class POSController extends Controller
             return response()->json(['error' => 'An error occurred while processing checkout.'], 500);
         }
     }
-
-
-
-    // public function checkout(Request $request)
-    // {
-    //     $categoryName = session('category', 'daily');
-
-    //     // Validation rules
-    //     $rules = [
-    //         'customer_id' => 'nullable|exists:customers,id',
-    //         'customer_name' => 'nullable|string|max:255|required_without:customer_id',
-    //         'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
-    //         'customer_address' => 'nullable|string|max:255|required_without:customer_id',
-    //         'cart' => 'required|array|min:1',
-    //         'cart.*.id' => 'required|exists:products,id',
-    //         'cart.*.quantity' => 'required|integer|min:1',
-    //         'total_discount' => 'nullable|numeric|min:0|max:100',
-    //         'deposit' => 'nullable|numeric|min:0',
-    //         'payment_amount' => 'nullable|numeric|min:0',
-    //         'payment_method' => 'required|in:cash,credit_card',
-    //         'note' => 'nullable',
-    //     ];
-
-    //     if ($categoryName === 'daily') {
-    //         $rules['rental_start_date'] = 'required|date';
-    //         $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
-    //         $rules['rental_days'] = 'required|integer|min:1';
-    //     }
-
-    //     $request->validate($rules);
-
-    //     try {
-    //         DB::beginTransaction();
-
-    //         // Handle Customer
-    //         if ($request->filled('customer_id')) {
-    //             $customer = Customer::findOrFail($request->customer_id);
-    //         } else {
-    //             $customer = Customer::create([
-    //                 'name' => $request->customer_name,
-    //                 'phone' => $request->customer_phone,
-    //                 'address' => $request->customer_address,
-    //             ]);
-    //         }
-
-    //         // Retrieve the selected category
-    //         $category = Category::where('name', $categoryName)->firstOrFail();
-
-    //         // Calculate totals
-    //         $subtotal = 0;
-    //         $invoiceItems = [];
-    //         foreach ($request->cart as $cartItem) {
-    //             $product = Product::findOrFail($cartItem['id']);
-    //             $quantity = $cartItem['quantity'];
-    //             $price = $product->price;
-
-    //             $totalPrice = ($categoryName === 'daily')
-    //                 ? $quantity * $price * $request->rental_days
-    //                 : $quantity * $price;
-
-    //             $invoiceItems[] = new InvoiceItem([
-    //                 'product_id' => $product->id,
-    //                 'quantity' => $quantity,
-    //                 'price' => $price,
-    //                 'total_price' => $totalPrice,
-    //                 'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
-    //                 'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-    //                 'days' => $categoryName === 'daily' ? $request->rental_days : null,
-    //                 'returned_quantity' => 0,
-    //                 'added_quantity' => 0,
-    //             ]);
-
-    //             $subtotal += $totalPrice;
-    //         }
-
-    //         // Discount calculations
-    //         $totalDiscount = $request->total_discount ?? 0;
-    //         $discountAmount = ($subtotal * $totalDiscount) / 100;
-
-    //         // Calculate the full total amount (before deposit)
-    //         $totalAmount = $subtotal - $discountAmount;
-
-    //         // Track deposit and payment
-    //         $deposit = $request->deposit ?? 0;
-    //         $paymentAmount = $request->payment_amount ?? 0;
-
-    //         // Ensure payment and deposit do not exceed the total
-    //         if ($deposit + $paymentAmount > $totalAmount) {
-    //             return response()->json(['error' => 'Payment and deposit exceed total amount.'], 400);
-    //         }
-
-    //         // Paid amount includes only additional payments beyond the deposit
-    //         $paidAmount = $paymentAmount;
-
-    //         // Create the Invoice
-    //         $invoiceData = [
-    //             'customer_id' => $customer->id,
-    //             'user_id' => auth()->user()->id,
-    //             'category_id' => $category->id,
-    //             'total_discount' => $totalDiscount,
-    //             'deposit' => $deposit,
-    //             'total_amount' => $totalAmount, // Full amount before subtracting deposit
-    //             'paid_amount' => $paidAmount, // Additional payments beyond deposit
-    //             'payment_method' => $request->payment_method,
-    //             'note' => $request->note,
-    //         ];
-
-    //         if ($categoryName === 'daily') {
-    //             $invoiceData['rental_start_date'] = $request->rental_start_date;
-    //             $invoiceData['rental_end_date'] = $request->rental_end_date;
-    //             $invoiceData['days'] = $request->rental_days;
-    //         }
-
-    //         $invoice = Invoice::create($invoiceData);
-
-    //         // Attach items to the invoice
-    //         $invoice->items()->saveMany($invoiceItems);
-
-    //         DB::commit();
-
-    //         return response()->json(['invoice_id' => $invoice->id, 'message' => 'Checkout successful.']);
-    //     } catch (\Exception $e) {
-    //         DB::rollBack();
-    //         Log::error('Checkout Exception:', [
-    //             'message' => $e->getMessage(),
-    //             'line' => $e->getLine(),
-    //             'file' => $e->getFile(),
-    //         ]);
-
-    //         return response()->json(['error' => 'An error occurred while processing checkout.'], 500);
-    //     }
-    // }
 
 
     public function store(Request $request)

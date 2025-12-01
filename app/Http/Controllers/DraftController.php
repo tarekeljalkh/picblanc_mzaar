@@ -160,7 +160,7 @@ class DraftController extends Controller
         }
 
         // Attach items to the invoice
-        $invoice->items()->saveMany($invoiceItems);
+        $invoice->invoiceItems()->saveMany($invoiceItems);
 
         return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
     }
@@ -185,7 +185,7 @@ class DraftController extends Controller
      */
     public function edit($id)
     {
-        $invoice = Invoice::with('items')->findOrFail($id);
+        $invoice = Invoice::with('invoiceItems')->findOrFail($id);
         $customers = Customer::all();
         $products = Product::all();
 
@@ -228,7 +228,7 @@ class DraftController extends Controller
 
         // Recalculate subtotal, discount, and total for updated items
         $subtotal = 0;
-        $invoice->items()->delete();
+        $invoice->invoiceItems()->delete();
         $invoiceItems = [];
 
         foreach ($request->products as $index => $product_id) {
@@ -251,7 +251,7 @@ class DraftController extends Controller
         $invoice->save();
 
         // Attach updated items to the invoice
-        $invoice->items()->saveMany($invoiceItems);
+        $invoice->invoiceItems()->saveMany($invoiceItems);
 
         return redirect()->route('invoices.index')->with('success', 'Invoice updated successfully');
     }
@@ -316,7 +316,7 @@ class DraftController extends Controller
                     continue;
                 }
 
-                $item = $invoice->items->find($key);
+                $item = $invoice->invoiceItems->find($key);
                 if (!$item) {
                     return redirect()->back()->withErrors([
                         "returns.{$key}.item_id" => "The selected item is invalid.",

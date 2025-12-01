@@ -179,10 +179,12 @@ class InvoiceItem extends Model
 
     public function getTotalPriceAttribute()
     {
-        if ($this->invoice->category->name === 'daily') {
-            return $this->price * $this->quantity * $this->days;
+        $days = 1;
+        if ($this->invoice->category->name === 'daily' && $this->rental_start_date && $this->rental_end_date) {
+            $days = \Carbon\Carbon::parse($this->rental_end_date)
+                ->diffInDays(\Carbon\Carbon::parse($this->rental_start_date)) + 1;
         }
-        return $this->price * $this->quantity;
+        return $this->price * $this->quantity * $days;
     }
 
     public function getFormattedStartDateAttribute()

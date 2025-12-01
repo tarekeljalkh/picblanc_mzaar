@@ -3,13 +3,22 @@
         'name' => 'laravel/laravel',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '4d330bcc27043ac4fd3bfc5bc07bba7bc60372cc',
+        'reference' => '98e9b5dac90c8abf0641a1bf80d4b551a19c0529',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
         'dev' => true,
     ),
     'versions' => array(
+        'barryvdh/laravel-debugbar' => array(
+            'pretty_version' => 'v3.15.4',
+            'version' => '3.15.4.0',
+            'reference' => 'c0667ea91f7185f1e074402c5788195e96bf8106',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../barryvdh/laravel-debugbar',
+            'aliases' => array(),
+            'dev_requirement' => true,
+        ),
         'barryvdh/laravel-dompdf' => array(
             'pretty_version' => 'v3.0.0',
             'version' => '3.0.0.0',
@@ -463,7 +472,7 @@
         'laravel/laravel' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '4d330bcc27043ac4fd3bfc5bc07bba7bc60372cc',
+            'reference' => '98e9b5dac90c8abf0641a1bf80d4b551a19c0529',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -736,6 +745,15 @@
             'aliases' => array(),
             'dev_requirement' => true,
         ),
+        'php-debugbar/php-debugbar' => array(
+            'pretty_version' => 'v2.1.6',
+            'version' => '2.1.6.0',
+            'reference' => '16fa68da5617220594aa5e33fa9de415f94784a0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../php-debugbar/php-debugbar',
+            'aliases' => array(),
+            'dev_requirement' => true,
+        ),
         'phpoffice/phpspreadsheet' => array(
             'pretty_version' => '1.29.7',
             'version' => '1.29.7.0',
@@ -910,8 +928,8 @@
         'psr/log-implementation' => array(
             'dev_requirement' => false,
             'provided' => array(
-                0 => '3.0.0',
-                1 => '1.0|2.0|3.0',
+                0 => '1.0|2.0|3.0',
+                1 => '3.0.0',
             ),
         ),
         'psr/simple-cache' => array(

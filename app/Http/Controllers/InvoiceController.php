@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\CustomItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\InvoicePayment;
 use App\Models\Product;
 use App\Models\ReturnDetail;
 use Illuminate\Http\Request;
@@ -27,57 +28,84 @@ class InvoiceController extends Controller
      * Display a listing of the resource.
      */
 
-     public function index(Request $request)
-     {
-         $selectedCategory = session('category', 'daily');
-         $status = $request->query('status');
-         $paymentStatus = $request->query('payment_status');
-         $startDate = $request->query('start_date');
-         $endDate = $request->query('end_date');
+    public function index(Request $request)
+    {
+        $selectedCategory = session('category', 'daily');
+        $status = $request->query('status');
+        $paymentStatus = $request->query('payment_status');
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
 
-         // Default to today's date if no date filters are provided
-         if (!$startDate && !$endDate) {
-             $startDate = \Carbon\Carbon::today()->toDateString();
-             $endDate = \Carbon\Carbon::today()->toDateString();
-         }
+        $hasDateFilter = $startDate && $endDate;
 
-         $invoices = Invoice::with(['customer', 'items', 'customItems', 'additionalItems', 'returnDetails'])
-             ->whereHas('category', function ($query) use ($selectedCategory) {
-                 $query->where('name', $selectedCategory);
-             })
-             ->when($selectedCategory === 'season', function ($query) use ($startDate, $endDate) {
-                 // Filter by created_at for 'season' category
-                 $query->whereBetween('created_at', [$startDate, $endDate]);
-             }, function ($query) use ($startDate, $endDate) {
-                 // Filter by rental dates for other categories
-                 $query->where(function ($query) use ($startDate, $endDate) {
-                     $query->whereBetween('rental_start_date', [$startDate, $endDate])
-                         ->orWhereBetween('rental_end_date', [$startDate, $endDate])
-                         ->orWhere(function ($query) use ($startDate, $endDate) {
-                             $query->where('rental_start_date', '>=', $startDate)
-                                   ->where('rental_end_date', '<>', $endDate);
-                         });
-                 });
-             })
-             ->get();
+        // ✅ Convert to Carbon Dates only if provided
+        if ($hasDateFilter) {
+            $startDate = Carbon::parse($startDate)->startOfDay();
+            $endDate = Carbon::parse($endDate)->endOfDay();
+        }
 
-         // Dynamic payment status filtering
-         if ($paymentStatus) {
-             $invoices = $invoices->filter(function ($invoice) use ($paymentStatus) {
-                 return $invoice->payment_status === $paymentStatus;
-             });
-         }
+        // ✅ Fetch Invoices with Eager Loading
+        $invoices = Invoice::with([
+            'customer',
+            'invoiceItems',
+            'customItems',
+            'additionalItems',
+            'payments',
+            'category',
+            'returnDetails.invoiceItem',
+            'returnDetails.additionalItem',
+            'returnDetails.customItem',
+        ])
+            ->whereHas('category', function ($query) use ($selectedCategory) {
+                $query->where('name', $selectedCategory);
+            });
 
-         // Dynamic returned status filtering
-         if ($status === 'returned') {
-             $invoices = $invoices->filter(fn($invoice) => $invoice->returned);
-         } elseif ($status === 'not_returned') {
-             $invoices = $invoices->filter(fn($invoice) => !$invoice->returned);
-         }
+        // ✅ Apply Date Filtering Based on Category Type
+        if ($hasDateFilter) {
+            if ($selectedCategory === 'season') {
+                $invoices->whereBetween('created_at', [$startDate, $endDate]);
+            } else {
+                $invoices->where(function ($query) use ($startDate, $endDate) {
+                    $query->whereBetween('rental_start_date', [$startDate, $endDate])
+                        ->orWhereBetween('rental_end_date', [$startDate, $endDate])
+                        ->orWhere(function ($query) use ($startDate, $endDate) {
+                            $query->where('rental_start_date', '<=', $endDate)
+                                ->where('rental_end_date', '>=', $startDate)
+                                ->where(function ($q) use ($startDate, $endDate) {
+                                    $q->where('rental_start_date', '>=', $startDate)
+                                        ->where('rental_end_date', '<=', $endDate);
+                                });
+                        });
+                });
+            }
+        }
 
-         return view('invoices.index', compact('invoices', 'selectedCategory', 'status', 'paymentStatus', 'startDate', 'endDate'));
-     }
+        // ✅ Fetch Filtered Invoices
+        $invoices = $invoices->get();
 
+        // ✅ Apply Payment Status Filtering Using Accessor
+        if ($paymentStatus) {
+            $invoices = $invoices->filter(function ($invoice) use ($paymentStatus) {
+                return $invoice->payment_status === $paymentStatus;
+            })->values(); // Reset keys
+        }
+
+        // ✅ Apply Returned / Not Returned Status Filtering
+        if ($status === 'returned') {
+            $invoices = $invoices->filter(fn($invoice) => $invoice->returned);
+        } elseif ($status === 'not_returned') {
+            $invoices = $invoices->filter(fn($invoice) => !$invoice->returned);
+        }
+
+        return view('invoices.index', compact(
+            'invoices',
+            'selectedCategory',
+            'status',
+            'paymentStatus',
+            'startDate',
+            'endDate'
+        ));
+    }
 
     /**
      * Show the form for creating a new resource.
@@ -93,288 +121,317 @@ class InvoiceController extends Controller
      * Store a newly created resource in storage.
      */
 
-     public function store(Request $request)
-     {
-         $categoryName = session('category', 'daily');
+    public function store(Request $request)
+    {
+        $categoryName = session('category', 'daily');
 
-         // Validation rules
-         $rules = [
-             'customer_id' => 'nullable|exists:customers,id',
-             'customer_name' => 'nullable|string|max:255|required_without:customer_id',
-             'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
-             'customer_address' => 'nullable|string|max:255|required_without:customer_id',
-             'products' => 'nullable|array',
-             'products.*' => 'nullable|exists:products,id',
-             'quantities' => 'required|array|min:1',
-             'quantities.*' => 'integer|min:1',
-             'prices' => 'required|array|min:1',
-             'prices.*' => 'numeric|min:0',
-             'custom_items' => 'nullable|array',
-             'custom_items.*.name' => 'required|string|max:255',
-             'custom_items.*.description' => 'nullable|string|max:255',
-             'custom_items.*.price' => 'required|numeric|min:0',
-             'custom_items.*.quantity' => 'required|integer|min:1',
-             'total_discount' => 'nullable|numeric|min:0|max:100',
-             'deposit' => 'nullable|numeric|min:0',
-             'payment_amount' => 'nullable|numeric|min:0',
-             'payment_method' => 'required|in:cash,credit_card',
-             'note' => 'nullable',
-         ];
+        // Validation rules
+        $rules = [
+            'customer_id' => 'nullable|exists:customers,id',
+            'customer_name' => 'nullable|string|max:255|required_without:customer_id',
+            'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
+            'customer_address' => 'nullable|string|max:255|required_without:customer_id',
+            'products' => 'nullable|array',
+            'products.*' => 'nullable|exists:products,id',
+            'quantities' => 'required|array|min:1',
+            'quantities.*' => 'integer|min:1',
+            'prices' => 'required|array|min:1',
+            'prices.*' => 'numeric|min:0',
+            'custom_items' => 'nullable|array',
+            'custom_items.*.name' => 'required|string|max:255',
+            'custom_items.*.description' => 'nullable|string|max:255',
+            'custom_items.*.price' => 'required|numeric|min:0',
+            'custom_items.*.quantity' => 'required|integer|min:1',
+            'total_discount' => 'nullable|numeric|min:0|max:100',
+            'deposit' => 'nullable|numeric|min:0',
+            'payment_amount' => 'nullable|numeric|min:0',
+            'payment_method' => 'required|in:cash,credit_card',
+            'note' => 'nullable',
+        ];
 
-         if ($categoryName === 'daily') {
-             $rules['rental_start_date'] = 'required|date';
-             $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
-             $rules['days'] = 'required|integer|min:1';
-         }
+        if ($categoryName === 'daily') {
+            $rules['rental_start_date'] = 'required|date';
+            $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
+            $rules['days'] = 'required|integer|min:1';
+        }
 
-         try {
-             // Validation
-             $validated = $request->validate($rules);
-             //Log::info('Validation passed:', $validated);
+        try {
+            // Validation
+            $validated = $request->validate($rules);
 
-             DB::beginTransaction();
+            DB::beginTransaction();
 
-             // Handle Customer
-             if ($request->filled('customer_id')) {
-                 $customer = Customer::findOrFail($request->customer_id);
-                 //Log::info('Customer fetched:', ['id' => $customer->id, 'name' => $customer->name]);
-             } else {
-                 $customer = Customer::create([
-                     'name' => $request->customer_name,
-                     'phone' => $request->customer_phone,
-                     'address' => $request->customer_address,
-                 ]);
-                 //Log::info('Customer created:', $customer->toArray());
-             }
+            // Handle Customer
+            if ($request->filled('customer_id')) {
+                $customer = Customer::findOrFail($request->customer_id);
+            } else {
+                $customer = Customer::create([
+                    'name' => $request->customer_name,
+                    'phone' => $request->customer_phone,
+                    'address' => $request->customer_address,
+                ]);
+            }
 
-             // Retrieve Category
-             $category = Category::where('name', $categoryName)->firstOrFail();
-             //Log::info('Category retrieved:', $category->toArray());
+            // Retrieve Category
+            $category = Category::where('name', $categoryName)->firstOrFail();
 
-             $subtotal = 0;
-             $invoiceItems = [];
-             $customItems = [];
+            $subtotal = 0;
+            $invoiceItems = [];
+            $customItems = [];
 
-             // Process Products
-             if (!empty($request->products)) {
-                 foreach ($request->products as $index => $productId) {
-                     if (!empty($productId)) {
-                         $product = Product::findOrFail($productId);
-                         $quantity = $request->quantities[$index];
-                         $price = $request->prices[$index];
+            // Process Products
+            if (!empty($request->products)) {
+                foreach ($request->products as $index => $productId) {
+                    if (!empty($productId)) {
+                        $product = Product::findOrFail($productId);
+                        $quantity = $request->quantities[$index];
+                        $price = $request->prices[$index];
 
-                         $totalPrice = ($categoryName === 'daily')
-                             ? $quantity * $price * $request->days
-                             : $quantity * $price;
+                        $totalPrice = ($categoryName === 'daily')
+                            ? $quantity * $price * $request->days
+                            : $quantity * $price;
 
-                         $invoiceItems[] = new InvoiceItem([
-                             'product_id' => $product->id,
-                             'quantity' => $quantity,
-                             'price' => $price,
-                             'total_price' => $totalPrice,
-                             'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
-                             'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-                             'days' => $categoryName === 'daily' ? $request->days : null,
-                             'returned_quantity' => 0,
-                             'added_quantity' => 0,
-                         ]);
+                        $invoiceItems[] = new InvoiceItem([
+                            'product_id' => $product->id,
+                            'quantity' => $quantity,
+                            'price' => $price,
+                            'total_price' => $totalPrice,
+                            'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
+                            'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
+                            'days' => $categoryName === 'daily' ? $request->days : null,
+                            'returned_quantity' => 0,
+                            'added_quantity' => 0,
+                        ]);
 
-                         //Log::info('Processed product:', ['product_id' => $productId, 'quantity' => $quantity, 'price' => $price, 'total_price' => $totalPrice]);
+                        $subtotal += $totalPrice;
+                    }
+                }
+            }
 
-                         $subtotal += $totalPrice;
-                     }
-                 }
-             }
+            // Process Custom Items
+            if (!empty($request->custom_items)) {
+                foreach ($request->custom_items as $customItem) {
+                    $customItems[] = new CustomItem([
+                        'name' => $customItem['name'],
+                        'description' => $customItem['description'] ?? '',
+                        'price' => $customItem['price'],
+                        'quantity' => $customItem['quantity'],
+                    ]);
 
-             // Process Custom Items
-             if (!empty($request->custom_items)) {
-                 foreach ($request->custom_items as $customItem) {
-                     $customItems[] = new CustomItem([
-                         'name' => $customItem['name'],
-                         'description' => $customItem['description'] ?? '',
-                         'price' => $customItem['price'],
-                         'quantity' => $customItem['quantity'],
-                     ]);
+                    $subtotal += $customItem['price'] * $customItem['quantity'];
+                }
+            }
 
-                     //Log::info('Processed custom item:', $customItem);
+            // Calculate VAT and Discount
+            $totalVat = $subtotal * ($request->total_discount ?? 0) / 100;
+            $totalDiscount = $subtotal * ($request->total_discount ?? 0) / 100;
 
-                     $subtotal += $customItem['price'] * $customItem['quantity'];
-                 }
-             }
+            $invoice = Invoice::create([
+                'customer_id' => $customer->id,
+                'category_id' => $category->id,
+                'total_vat' => $totalVat,
+                'total_discount' => $totalDiscount,
+                'deposit' => $request->deposit ?? 0,
+                'status' => 'active',  // You can adjust this based on the status
+                'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
+                'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
+                'days' => $categoryName === 'daily' ? $request->days : null,
+                'note' => $request->note,
+                'user_id' => auth()->id(), // Assuming the user is authenticated
+            ]);
 
-             $totalDiscount = $request->total_discount ?? 0;
-             $discountAmount = ($subtotal * $totalDiscount) / 100;
-             $totalAmount = $subtotal - $discountAmount;
-             $deposit = $request->deposit ?? 0;
-             $paymentAmount = $request->payment_amount ?? 0;
+            // Attach items to invoice
+            $invoice->invoiceItems()->saveMany($invoiceItems);
+            $invoice->customItems()->saveMany($customItems);
 
-             $invoiceData = [
-                 'customer_id' => $customer->id,
-                 'user_id' => auth()->user()->id,
-                 'category_id' => $category->id,
-                 'total_discount' => $totalDiscount,
-                 'deposit' => $deposit,
-                 'total_amount' => $totalAmount,
-                 'paid_amount' => $paymentAmount,
-                 'payment_method' => $request->payment_method,
-                 'note' => $request->note,
-             ];
+            // Create payment record if payment is made
+            if ($request->filled('payment_amount') && $request->payment_amount > 0) {
+                InvoicePayment::create([
+                    'invoice_id' => $invoice->id,
+                    'amount' => $request->payment_amount,
+                    'payment_method' => $request->payment_method,
+                    'payment_date' => now(),
+                ]);
+            }
 
-             if ($categoryName === 'daily') {
-                 $invoiceData['rental_start_date'] = $request->rental_start_date;
-                 $invoiceData['rental_end_date'] = $request->rental_end_date;
-                 $invoiceData['days'] = $request->days;
-             }
-
-             //Log::info('Invoice data:', $invoiceData);
-
-             $invoice = Invoice::create($invoiceData);
-
-             if (!empty($invoiceItems)) {
-                 $invoice->items()->saveMany($invoiceItems);
-                 //Log::info('Invoice items saved:', $invoiceItems);
-             }
-
-             if (!empty($customItems)) {
-                 foreach ($customItems as $item) {
-                     $item->invoice_id = $invoice->id;
-                     $item->save();
-                     //Log::info('Custom item saved:', $item->toArray());
-                 }
-             }
-
-             DB::commit();
-
-             return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
-         } catch (\Illuminate\Validation\ValidationException $e) {
-             //Log::error('Validation Exception:', $e->errors());
-             return redirect()->back()->withErrors($e->errors())->withInput();
-         } catch (\Exception $e) {
-             DB::rollBack();
+            DB::commit();
+            return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
+        } catch (\Exception $e) {
+            DB::rollBack();
             //  Log::error('Store Invoice Exception:', [
             //      'message' => $e->getMessage(),
             //      'line' => $e->getLine(),
             //      'file' => $e->getFile(),
             //  ]);
-             return redirect()->back()->with('error', 'An error occurred while creating the invoice.');
-         }
-     }
+            return redirect()->back()->with('error', 'An error occurred while creating the invoice.');
+        }
+    }
+    //  public function store(Request $request)
+    //  {
+    //      $categoryName = session('category', 'daily');
 
+    //      // Validation rules
+    //      $rules = [
+    //          'customer_id' => 'nullable|exists:customers,id',
+    //          'customer_name' => 'nullable|string|max:255|required_without:customer_id',
+    //          'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
+    //          'customer_address' => 'nullable|string|max:255|required_without:customer_id',
+    //          'products' => 'nullable|array',
+    //          'products.*' => 'nullable|exists:products,id',
+    //          'quantities' => 'required|array|min:1',
+    //          'quantities.*' => 'integer|min:1',
+    //          'prices' => 'required|array|min:1',
+    //          'prices.*' => 'numeric|min:0',
+    //          'custom_items' => 'nullable|array',
+    //          'custom_items.*.name' => 'required|string|max:255',
+    //          'custom_items.*.description' => 'nullable|string|max:255',
+    //          'custom_items.*.price' => 'required|numeric|min:0',
+    //          'custom_items.*.quantity' => 'required|integer|min:1',
+    //          'total_discount' => 'nullable|numeric|min:0|max:100',
+    //          'deposit' => 'nullable|numeric|min:0',
+    //          'payment_amount' => 'nullable|numeric|min:0',
+    //          'payment_method' => 'required|in:cash,credit_card',
+    //          'note' => 'nullable',
+    //      ];
 
-    // public function store(Request $request)
-    // {
-    //     $categoryName = session('category', 'daily');
+    //      if ($categoryName === 'daily') {
+    //          $rules['rental_start_date'] = 'required|date';
+    //          $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
+    //          $rules['days'] = 'required|integer|min:1';
+    //      }
 
-    //     // Validation rules
-    //     $rules = [
-    //         'customer_id' => 'nullable|exists:customers,id',
-    //         'customer_name' => 'nullable|string|max:255|required_without:customer_id',
-    //         'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
-    //         'customer_address' => 'nullable|string|max:255|required_without:customer_id',
-    //         'products' => 'required|array|min:1',
-    //         'products.*' => 'exists:products,id',
-    //         'quantities' => 'required|array|min:1',
-    //         'quantities.*' => 'integer|min:1',
-    //         'prices' => 'required|array|min:1',
-    //         'prices.*' => 'numeric|min:0',
-    //         'total_discount' => 'nullable|numeric|min:0|max:100',
-    //         'deposit' => 'nullable|numeric|min:0',
-    //         'payment_amount' => 'nullable|numeric|min:0',
-    //         'payment_method' => 'required|in:cash,credit_card',
-    //         'note' => 'nullable',
-    //     ];
+    //      try {
+    //          // Validation
+    //          $validated = $request->validate($rules);
+    //          //Log::info('Validation passed:', $validated);
 
-    //     if ($categoryName === 'daily') {
-    //         $rules['rental_start_date'] = 'required|date';
-    //         $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
-    //         $rules['days'] = 'required|integer|min:1';
-    //     }
+    //          DB::beginTransaction();
 
-    //     $request->validate($rules);
+    //          // Handle Customer
+    //          if ($request->filled('customer_id')) {
+    //              $customer = Customer::findOrFail($request->customer_id);
+    //              //Log::info('Customer fetched:', ['id' => $customer->id, 'name' => $customer->name]);
+    //          } else {
+    //              $customer = Customer::create([
+    //                  'name' => $request->customer_name,
+    //                  'phone' => $request->customer_phone,
+    //                  'address' => $request->customer_address,
+    //              ]);
+    //              //Log::info('Customer created:', $customer->toArray());
+    //          }
 
-    //     try {
-    //         DB::beginTransaction();
+    //          // Retrieve Category
+    //          $category = Category::where('name', $categoryName)->firstOrFail();
+    //          //Log::info('Category retrieved:', $category->toArray());
 
-    //         // Handle Customer
-    //         if ($request->filled('customer_id')) {
-    //             $customer = Customer::findOrFail($request->customer_id);
-    //         } else {
-    //             $customer = Customer::create([
-    //                 'name' => $request->customer_name,
-    //                 'phone' => $request->customer_phone,
-    //                 'address' => $request->customer_address,
-    //             ]);
-    //         }
+    //          $subtotal = 0;
+    //          $invoiceItems = [];
+    //          $customItems = [];
 
-    //         // Retrieve the selected category
-    //         $category = Category::where('name', $categoryName)->firstOrFail();
+    //          // Process Products
+    //          if (!empty($request->products)) {
+    //              foreach ($request->products as $index => $productId) {
+    //                  if (!empty($productId)) {
+    //                      $product = Product::findOrFail($productId);
+    //                      $quantity = $request->quantities[$index];
+    //                      $price = $request->prices[$index];
 
-    //         // Calculate the base subtotal (raw total without adjustments)
-    //         $subtotal = 0;
-    //         $invoiceItems = [];
+    //                      $totalPrice = ($categoryName === 'daily')
+    //                          ? $quantity * $price * $request->days
+    //                          : $quantity * $price;
 
-    //         foreach ($request->products as $index => $product_id) {
-    //             $quantity = $request->quantities[$index];
-    //             $price = $request->prices[$index];
+    //                      $invoiceItems[] = new InvoiceItem([
+    //                          'product_id' => $product->id,
+    //                          'quantity' => $quantity,
+    //                          'price' => $price,
+    //                          'total_price' => $totalPrice,
+    //                          'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
+    //                          'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
+    //                          'days' => $categoryName === 'daily' ? $request->days : null,
+    //                          'returned_quantity' => 0,
+    //                          'added_quantity' => 0,
+    //                      ]);
 
-    //             $totalPrice = ($categoryName === 'daily')
-    //                 ? $quantity * $price * $request->days
-    //                 : $quantity * $price;
+    //                      //Log::info('Processed product:', ['product_id' => $productId, 'quantity' => $quantity, 'price' => $price, 'total_price' => $totalPrice]);
 
-    //             $invoiceItems[] = new InvoiceItem([
-    //                 'product_id' => $product_id,
-    //                 'quantity' => $quantity,
-    //                 'price' => $price,
-    //                 'total_price' => $totalPrice,
-    //                 'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
-    //                 'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-    //                 'days' => $categoryName === 'daily' ? $request->days : null,
-    //                 'returned_quantity' => 0,
-    //                 'added_quantity' => 0,
-    //             ]);
+    //                      $subtotal += $totalPrice;
+    //                  }
+    //              }
+    //          }
 
-    //             $subtotal += $totalPrice;
-    //         }
+    //          // Process Custom Items
+    //          if (!empty($request->custom_items)) {
+    //              foreach ($request->custom_items as $customItem) {
+    //                  $customItems[] = new CustomItem([
+    //                      'name' => $customItem['name'],
+    //                      'description' => $customItem['description'] ?? '',
+    //                      'price' => $customItem['price'],
+    //                      'quantity' => $customItem['quantity'],
+    //                  ]);
 
-    //         // Create the Invoice (store base subtotal as total_amount)
-    //         $invoiceData = [
-    //             'customer_id' => $customer->id,
-    //             'user_id' => auth()->user()->id,
-    //             'category_id' => $category->id,
-    //             'total_discount' => $request->total_discount ?? 0, // Discount stored but not applied
-    //             'deposit' => $request->deposit ?? 0, // Deposit stored but not applied
-    //             'total_amount' => $subtotal, // Store subtotal as the base amount
-    //             'paid_amount' => $request->payment_amount ?? 0,
-    //             'payment_method' => $request->payment_method,
-    //             'note' => $request->note,
-    //         ];
+    //                  //Log::info('Processed custom item:', $customItem);
 
-    //         if ($categoryName === 'daily') {
-    //             $invoiceData['rental_start_date'] = $request->rental_start_date;
-    //             $invoiceData['rental_end_date'] = $request->rental_end_date;
-    //             $invoiceData['days'] = $request->days;
-    //         }
+    //                  $subtotal += $customItem['price'] * $customItem['quantity'];
+    //              }
+    //          }
 
-    //         $invoice = Invoice::create($invoiceData);
+    //          $totalDiscount = $request->total_discount ?? 0;
+    //          $discountAmount = ($subtotal * $totalDiscount) / 100;
+    //          $totalAmount = $subtotal - $discountAmount;
+    //          $deposit = $request->deposit ?? 0;
+    //          $paymentAmount = $request->payment_amount ?? 0;
 
-    //         // Attach items to the invoice
-    //         $invoice->items()->saveMany($invoiceItems);
+    //          $invoiceData = [
+    //              'customer_id' => $customer->id,
+    //              'user_id' => auth()->user()->id,
+    //              'category_id' => $category->id,
+    //              'total_discount' => $totalDiscount,
+    //              'deposit' => $deposit,
+    //              'total_amount' => $totalAmount,
+    //              'paid_amount' => $paymentAmount,
+    //              'payment_method' => $request->payment_method,
+    //              'note' => $request->note,
+    //          ];
 
-    //         DB::commit();
+    //          if ($categoryName === 'daily') {
+    //              $invoiceData['rental_start_date'] = $request->rental_start_date;
+    //              $invoiceData['rental_end_date'] = $request->rental_end_date;
+    //              $invoiceData['days'] = $request->days;
+    //          }
 
-    //         return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
-    //     } catch (\Exception $e) {
-    //         DB::rollBack();
-    //         Log::error('Store Invoice Exception:', [
-    //             'message' => $e->getMessage(),
-    //             'line' => $e->getLine(),
-    //             'file' => $e->getFile(),
-    //         ]);
+    //          //Log::info('Invoice data:', $invoiceData);
 
-    //         return redirect()->back()->with('error', 'An error occurred while creating the invoice.');
-    //     }
-    // }
+    //          $invoice = Invoice::create($invoiceData);
 
+    //          if (!empty($invoiceItems)) {
+    //              $invoice->invoiceItems()->saveMany($invoiceItems);
+    //              //Log::info('Invoice items saved:', $invoiceItems);
+    //          }
+
+    //          if (!empty($customItems)) {
+    //              foreach ($customItems as $item) {
+    //                  $item->invoice_id = $invoice->id;
+    //                  $item->save();
+    //                  //Log::info('Custom item saved:', $item->toArray());
+    //              }
+    //          }
+
+    //          DB::commit();
+
+    //          return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
+    //      } catch (\Illuminate\Validation\ValidationException $e) {
+    //          //Log::error('Validation Exception:', $e->errors());
+    //          return redirect()->back()->withErrors($e->errors())->withInput();
+    //      } catch (\Exception $e) {
+    //          DB::rollBack();
+    //         //  Log::error('Store Invoice Exception:', [
+    //         //      'message' => $e->getMessage(),
+    //         //      'line' => $e->getLine(),
+    //         //      'file' => $e->getFile(),
+    //         //  ]);
+    //          return redirect()->back()->with('error', 'An error occurred while creating the invoice.');
+    //      }
+    //  }
 
     /**
      * Show the specified resource.
@@ -382,29 +439,34 @@ class InvoiceController extends Controller
     public function show($id)
     {
         $invoice = Invoice::with([
-            'items.product',
+            'invoiceItems.product',
             'additionalItems',
-            'customItems', // Include custom items here
+            'customItems',
             'returnDetails.invoiceItem.product',
             'returnDetails.additionalItem.product',
+            'payments', // make sure payments are eager loaded too
         ])->findOrFail($id);
 
         $totals = $invoice->calculateTotals();
         return view('invoices.show', compact('invoice', 'totals'));
     }
 
-
     /**
      * Show the form for editing the specified resource.
      */
     public function edit($id)
     {
-        $invoice = Invoice::with(['items', 'additionalItems', 'returnDetails'])->findOrFail($id);
+        $invoice = Invoice::with(['invoiceItems', 'additionalItems', 'returnDetails'])->findOrFail($id);
         $customers = Customer::all();
-        $products = Product::all();
+        $categoryName = session('category', 'daily'); // Get category from session
+
+        // Fetch only products that belong to the selected category
+        $products = Product::whereHas('category', function ($query) use ($categoryName) {
+            $query->where('name', $categoryName);
+        })->get();
 
         // Determine if the mode is seasonal
-        $isSeasonal = session('category') === 'season'; // Replace 'category' logic as per your app rules
+        $isSeasonal = $categoryName === 'season';
 
         // Calculate totals
         $totals = $invoice->calculateTotals();
@@ -448,7 +510,7 @@ class InvoiceController extends Controller
 
         // Recalculate subtotal, discount, and total for updated items
         $subtotal = 0;
-        $invoice->items()->delete();
+        $invoice->invoiceItems()->delete();
         $invoiceItems = [];
 
         foreach ($request->products as $index => $product_id) {
@@ -471,7 +533,7 @@ class InvoiceController extends Controller
         $invoice->save();
 
         // Attach updated items to the invoice
-        $invoice->items()->saveMany($invoiceItems);
+        $invoice->invoiceItems()->saveMany($invoiceItems);
 
         return redirect()->route('invoices.index')->with('success', 'Invoice updated successfully');
     }
@@ -493,7 +555,13 @@ class InvoiceController extends Controller
 
     public function print($id)
     {
-        $invoice = Invoice::with(['items.product', 'additionalItems', 'returnDetails.invoiceItem.product'])->findOrFail($id);
+        $invoice = Invoice::with([
+            'invoiceItems.product',
+            'additionalItems',
+            'returnDetails.invoiceItem.product',
+            'returnDetails.additionalItem',
+            'returnDetails.customItem'
+        ])->findOrFail($id);
 
         // Ensure totals are calculated using the revised logic
         $totals = $invoice->calculateTotals();
@@ -506,7 +574,14 @@ class InvoiceController extends Controller
      */
     public function download($id)
     {
-        $invoice = Invoice::with('items.product', 'additionalItems', 'returnDetails')->findOrFail($id);
+        $invoice = Invoice::with([
+            'invoiceItems.product',
+            'additionalItems',
+            'customItems',
+            'returnDetails.invoiceItem.product',
+            'returnDetails.additionalItem.product',
+            'returnDetails.customItem'
+        ])->findOrFail($id);
 
         $totals = $invoice->calculateTotals();
 
@@ -514,6 +589,7 @@ class InvoiceController extends Controller
 
         return $pdf->download("invoice-{$invoice->id}.pdf");
     }
+
 
 
     public function processReturns(Request $request, $invoiceId)
@@ -607,7 +683,7 @@ class InvoiceController extends Controller
                 }
             }
 
-            $allOriginalItemsReturned = $invoice->items()->whereColumn('returned_quantity', '<', 'quantity')->doesntExist();
+            $allOriginalItemsReturned = $invoice->invoiceItems()->whereColumn('returned_quantity', '<', 'quantity')->doesntExist();
             $allAdditionalItemsReturned = $invoice->additionalItems()->whereColumn('returned_quantity', '<', 'quantity')->doesntExist();
 
             // Update invoice status
@@ -621,6 +697,75 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()->with('error', 'Failed to process returns: ' . $e->getMessage());
+        }
+    }
+
+
+    public function addDates(Request $request, $invoiceId)
+    {
+        $messages = [
+            'returns.required' => 'You must provide at least one item.',
+            'returns.*.*.from.required_if' => 'The From Date is required when an item is selected.',
+            'returns.*.*.from.date' => 'The From Date must be a valid date.',
+            'returns.*.*.to.required_if' => 'The To Date is required when an item is selected.',
+            'returns.*.*.to.date' => 'The To Date must be a valid date.',
+            'returns.*.*.to.after_or_equal' => 'The To Date must be after or equal to the From Date.',
+        ];
+
+        $rules = [
+            'returns' => 'required|array',
+            'returns.*.*.selected' => 'sometimes|required|boolean',
+            'returns.*.*.from' => 'required_if:returns.*.*.selected,1|date',
+            'returns.*.*.to' => 'required_if:returns.*.*.selected,1|date|after_or_equal:returns.*.*.from',
+        ];
+
+        $validated = $request->validate($rules, $messages);
+
+        $invoice = Invoice::findOrFail($invoiceId);
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($validated['returns'] as $type => $items) {
+                foreach ($items as $id => $item) {
+                    if (empty($item['selected'])) {
+                        continue;
+                    }
+
+                    $model = match ($type) {
+                        'original' => InvoiceItem::findOrFail($id),
+                        'additional' => AdditionalItem::findOrFail($id),
+                        'custom' => CustomItem::findOrFail($id),
+                        default => throw new \Exception('Invalid item type.'),
+                    };
+
+                    $fromDate = Carbon::parse($item['from']);
+                    $toDate = Carbon::parse($item['to']);
+
+                    // Save the dates in the model (or a separate table if multiple ranges)
+                    $model->rental_start_date = $fromDate;
+                    $model->rental_end_date = $toDate;
+                    $model->save();
+
+                    // Optional: save to ReturnDetail table if you want a separate log
+                    // ReturnDetail::create([
+                    //     'invoice_id' => $invoice->id,
+                    //     'invoice_item_id' => $type === 'original' ? $model->id : null,
+                    //     'additional_item_id' => $type === 'additional' ? $model->id : null,
+                    //     'custom_item_id' => $type === 'custom' ? $model->id : null,
+                    //     'from_date' => $fromDate,
+                    //     'to_date' => $toDate,
+                    // ]);
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('success', 'Dates added/updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Failed to add dates: ' . $e->getMessage());
         }
     }
 
@@ -712,7 +857,7 @@ class InvoiceController extends Controller
     //             }
     //         }
 
-    //         $allOriginalItemsReturned = $invoice->items()->whereColumn('returned_quantity', '<', 'quantity')->doesntExist();
+    //         $allOriginalItemsReturned = $invoice->invoiceItems()->whereColumn('returned_quantity', '<', 'quantity')->doesntExist();
     //         $allAdditionalItemsReturned = $invoice->additionalItems()->whereColumn('returned_quantity', '<', 'quantity')->doesntExist();
 
     //         // Update invoice status
@@ -814,7 +959,7 @@ class InvoiceController extends Controller
         if ($validated['status'] === 'returned') {
             // Gather all items and additional items for processing
             $returns = [
-                'original' => $invoice->items->mapWithKeys(function ($item) {
+                'original' => $invoice->invoiceItems->mapWithKeys(function ($item) {
                     return [$item->id => ['selected' => true, 'quantity' => $item->quantity]];
                 })->toArray(),
                 'additional' => $invoice->additionalItems->mapWithKeys(function ($item) {
@@ -854,7 +999,7 @@ class InvoiceController extends Controller
     //     $invoice->save();
 
     //     // Update all related InvoiceItem statuses
-    //     $invoice->items()->update(['status' => 'returned']);
+    //     $invoice->invoiceItems()->update(['status' => 'returned']);
 
     //     // Update all related AdditionalItem statuses
     //     $invoice->additionalItems()->update(['status' => 'returned']);
@@ -906,6 +1051,7 @@ class InvoiceController extends Controller
         return view('invoices.unpaid', compact('invoices', 'selectedCategory'));
     }
 
+
     public function addPayment(Request $request, $invoiceId)
     {
         // Find the invoice
@@ -917,28 +1063,38 @@ class InvoiceController extends Controller
         // Use the balance due from the calculated totals
         $balanceDue = $totals['balanceDue'];
 
-        // Validate the new payment amount
+        // Validate the new payment amount and payment method
         $validated = $request->validate([
             'new_payment' => 'required|numeric|min:0|max:' . $balanceDue,
+            'payment_method' => 'required|in:cash,credit_card',
         ]);
 
-        // Update the paid amount
-        $invoice->paid_amount += $validated['new_payment'];
-
-        // Save the invoice
-        $invoice->save();
+        // Add the new payment to the invoice_payments table
+        $payment = new InvoicePayment();
+        $payment->invoice_id = $invoice->id;
+        $payment->amount = $validated['new_payment'];
+        $payment->payment_method = $validated['payment_method'];
+        $payment->payment_date = now(); // Current date and time for the payment
+        $payment->save();
 
         return redirect()->route('invoices.show', $invoice->id)
             ->with('success', 'Payment added successfully.');
     }
 
-
     // public function addPayment(Request $request, $invoiceId)
     // {
+    //     // Find the invoice
     //     $invoice = Invoice::findOrFail($invoiceId);
+
+    //     // Get the calculated totals
+    //     $totals = $invoice->calculateTotals();
+
+    //     // Use the balance due from the calculated totals
+    //     $balanceDue = $totals['balanceDue'];
+
     //     // Validate the new payment amount
     //     $validated = $request->validate([
-    //         'new_payment' => 'required|numeric|min:0|max:' . ($invoice->total_amount - $invoice->paid_amount - $invoice->deposit),
+    //         'new_payment' => 'required|numeric|min:0|max:' . $balanceDue,
     //     ]);
 
     //     // Update the paid amount
@@ -951,4 +1107,43 @@ class InvoiceController extends Controller
     //         ->with('success', 'Payment added successfully.');
     // }
 
+    public function updateNote(Request $request, Invoice $invoice)
+    {
+        $request->validate([
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $invoice->note = $request->note;
+        $invoice->save();
+
+        return redirect()->back()->with('success', 'Note updated successfully.');
+    }
+
+    public function showRemoveItems($invoiceId)
+    {
+        $invoice = Invoice::with(['invoiceItems.product', 'customItems', 'additionalItems.product'])->findOrFail($invoiceId);
+        return view('invoices.remove-items', compact('invoice'));
+    }
+
+    public function destroyItem($id)
+    {
+        $item = InvoiceItem::findOrFail($id);
+        $item->delete();
+
+        return redirect()->back()->with('success', 'Item removed successfully.');
+    }
+
+    public function destroyCustom($id)
+    {
+        $customItem = CustomItem::findOrFail($id);
+        $customItem->delete();
+        return redirect()->back()->with('success', 'Custom item deleted.');
+    }
+
+    public function destroyAdditional($id)
+    {
+        $additionalItem = AdditionalItem::findOrFail($id);
+        $additionalItem->delete();
+        return redirect()->back()->with('success', 'Additional item deleted.');
+    }
 }

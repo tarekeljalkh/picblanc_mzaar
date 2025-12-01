@@ -115,7 +115,7 @@
                                             <td><input type="number" class="form-control quantity" name="quantities[]"
                                                     value="1" /></td>
                                             <td><input type="text" class="form-control price" name="prices[]"
-                                                    value="0.00" readonly /></td>
+                                                    value="0.00" /></td>
                                             <td><input type="text" class="form-control total-price" name="total_price[]"
                                                     value="0.00" readonly /></td>
                                             <td><button type="button" class="btn btn-danger remove-item">Remove</button>
@@ -154,7 +154,7 @@
                         </div>
 
 
-                        {{-- Days and Total Amount --}}
+                        {{-- Days --}}
                         @if (session('category') === 'daily')
                             <div class="mb-4 row">
                                 <label for="days" class="col-md-2 col-form-label">Days</label>
@@ -179,7 +179,7 @@
                             <label for="total_amount" class="col-md-2 col-form-label">Total Amount</label>
                             <div class="col-md-10">
                                 <input type="text" class="form-control" id="total_amount" name="total_amount"
-                                    value="0.00" readonly />
+                                    value="0.00"/>
                             </div>
                         </div>
 
@@ -275,10 +275,9 @@
         // Initialize date pickers for rental start and end dates
         if (category === 'daily') {
             flatpickr("#rental_start_date, #rental_end_date", {
-                enableTime: true,
-                dateFormat: "Y-m-d H:i",
+                dateFormat: "Y-m-d",
                 altInput: true,
-                altFormat: "F j, Y h:i K",
+                altFormat: "F j, Y",
                 allowInput: true,
                 onChange: function() {
                     updateDaysFromDates();
@@ -316,7 +315,7 @@
 
             if (!isNaN(startDate) && !isNaN(endDate) && startDate <= endDate) {
                 const diffTime = Math.abs(endDate - startDate);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
                 $('#days').val(diffDays);
             }
         }
@@ -424,6 +423,10 @@
             calculateRowTotal($(this).closest('tr'));
         });
 
+        $(document).on('input', '.price', function() {
+    calculateRowTotal($(this).closest('tr'));
+});
+
         // Add a new item row
         $('#add-item').on('click', function() {
             const newRow = `
@@ -437,7 +440,7 @@
                         </select>
                     </td>
                     <td><input type="number" class="form-control quantity" name="quantities[]" value="1" /></td>
-                    <td><input type="text" class="form-control price" name="prices[]" value="0.00" readonly /></td>
+<td><input type="number" class="form-control price" name="prices[]" value="0.00" step="0.01" min="0" /></td>
                     <td><input type="text" class="form-control total-price" name="total_price[]" value="0.00" readonly /></td>
                     <td><button type="button" class="btn btn-danger remove-item">Remove</button></td>
                 </tr>`;

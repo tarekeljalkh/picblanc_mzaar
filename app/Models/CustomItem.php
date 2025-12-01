@@ -20,7 +20,7 @@ class CustomItem extends Model
         'rental_start_date',
         'rental_end_date',
         'days',
-    ];
+        ];
 
     public function invoice()
     {

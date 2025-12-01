@@ -1,5 +1,11 @@
 <form action="{{ route('invoices.process-returns', $invoice->id) }}" method="POST">
     @csrf
+
+    <div class="mb-2">
+        <input type="checkbox" id="return-all-checkbox" class="form-check-input me-1">
+        <label for="return-all-checkbox" class="form-check-label">Return All Items</label>
+    </div>
+
     <div class="table-responsive">
         <table class="table table-bordered">
             <thead class="table-light">
@@ -17,12 +23,13 @@
             </thead>
             <tbody>
                 <!-- Original Items -->
-                @foreach ($invoice->items as $item)
+                @foreach ($invoice->invoiceItems as $item)
                     @if ($item->quantity - $item->returned_quantity > 0)
                         <tr>
                             <td>
                                 <input type="checkbox" class="form-check-input return-checkbox"
                                     name="returns[original][{{ $item->id }}][selected]" value="1"
+                                    data-rental-end-date="{{ optional($item->rental_end_date)->format('Y-m-d') }}"
                                     {{ old("returns.original.{$item->id}.selected") ? 'checked' : '' }}>
                             </td>
                             <td>{{ $item->product->name }}</td>
@@ -37,7 +44,7 @@
                             </td>
                             @if (session('category') === 'daily')
                                 <td>
-                                    <input type="datetime-local" class="form-control return-date"
+                                    <input type="date" class="form-control return-date"
                                         name="returns[original][{{ $item->id }}][return_date]"
                                         data-start-date="{{ $item->rental_start_date }}"
                                         value="{{ old("returns.original.{$item->id}.return_date") }}"
@@ -61,6 +68,7 @@
                             <td>
                                 <input type="checkbox" class="form-check-input return-checkbox"
                                     name="returns[additional][{{ $addedItem->id }}][selected]" value="1"
+                                    data-rental-end-date="{{ optional($addedItem->rental_end_date)->format('Y-m-d') }}"
                                     {{ old("returns.additional.{$addedItem->id}.selected") ? 'checked' : '' }}>
                             </td>
                             <td>{{ $addedItem->product->name }}</td>
@@ -75,7 +83,7 @@
                             </td>
                             @if (session('category') === 'daily')
                                 <td>
-                                    <input type="datetime-local" class="form-control return-date"
+                                    <input type="date" class="form-control return-date"
                                         name="returns[additional][{{ $addedItem->id }}][return_date]"
                                         data-start-date="{{ $addedItem->rental_start_date }}"
                                         value="{{ old("returns.additional.{$addedItem->id}.return_date") }}"
@@ -99,6 +107,7 @@
                             <td>
                                 <input type="checkbox" class="form-check-input return-checkbox"
                                     name="returns[custom][{{ $customItem->id }}][selected]" value="1"
+                                    data-rental-end-date="{{ optional($customItem->rental_end_date ?? $invoice->rental_end_date)->format('Y-m-d') }}"
                                     {{ old("returns.custom.{$customItem->id}.selected") ? 'checked' : '' }}>
                             </td>
                             <td>{{ $customItem->name }}</td>
@@ -113,7 +122,7 @@
                             </td>
                             @if (session('category') === 'daily')
                                 <td>
-                                    <input type="datetime-local" class="form-control return-date"
+                                    <input type="date" class="form-control return-date"
                                         name="returns[custom][{{ $customItem->id }}][return_date]"
                                         data-start-date="{{ $customItem->rental_start_date ?? $invoice->rental_start_date }}"
                                         value="{{ old("returns.custom.{$customItem->id}.return_date") }}"
@@ -134,7 +143,7 @@
         </table>
     </div>
     <div class="d-flex justify-content-end mt-3">
-        <button type="submit" class="btn btn-warning">Process Returns</button>
+        <button type="submit" class="btn btn-warning">Save</button>
     </div>
 </form>
 
@@ -149,8 +158,7 @@
                     const startDate = input.getAttribute('data-start-date');
 
                     flatpickr(input, {
-                        enableTime: true,
-                        dateFormat: 'Y-m-d H:i',
+                        dateFormat: 'Y-m-d',
                         minDate: startDate || null, // ✅ Fallback to current date if undefined
                         onChange: function() {
                             calculateDaysOfUse(input);
@@ -161,37 +169,57 @@
 
             initializeFlatpickr();
 
-            document.querySelectorAll('.return-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    const row = this.closest('tr');
-                    const quantityInput = row.querySelector('.return-quantity');
-                    const dateInput = row.querySelector('.return-date');
-                    const daysOfUseInput = row.querySelector('.days-of-use');
+            document.getElementById('return-all-checkbox').addEventListener('change', function() {
+                const isChecked = this.checked;
 
-                    if (this.checked) {
-                        quantityInput.removeAttribute('disabled');
-                        dateInput.removeAttribute('disabled');
-                        if (daysOfUseInput) {
-                            daysOfUseInput.removeAttribute('disabled');
-                        }
+                document.querySelectorAll('.return-checkbox').forEach(cb => {
+                    if (!cb.disabled) {
+                        cb.checked = isChecked;
 
-                        flatpickr(dateInput, {
-                            enableTime: true,
-                            dateFormat: 'Y-m-d H:i',
-                            minDate: dateInput.getAttribute('data-start-date') ||
-                            null, // ✅ Add fallback
-                            onChange: function() {
-                                calculateDaysOfUse(dateInput);
-                            },
-                        });
-                    } else {
-                        quantityInput.setAttribute('disabled', 'true');
-                        quantityInput.value = '';
-                        dateInput.setAttribute('disabled', 'true');
-                        dateInput.value = '';
-                        if (daysOfUseInput) {
-                            daysOfUseInput.setAttribute('disabled', 'true');
-                            daysOfUseInput.value = '';
+                        const row = cb.closest('tr');
+                        const quantityInput = row.querySelector('.return-quantity');
+                        const dateInput = row.querySelector('.return-date');
+                        const daysOfUseInput = row.querySelector('.days-of-use');
+                        const rentalEndDate = cb.dataset.rentalEndDate;
+
+                        if (isChecked) {
+                            quantityInput.removeAttribute('disabled');
+                            dateInput.removeAttribute('disabled');
+                            daysOfUseInput?.removeAttribute('disabled');
+
+                            quantityInput.value = quantityInput.getAttribute('max');
+
+                            const formattedDate = rentalEndDate || new Date().toISOString().split(
+                                'T')[0];
+                            dateInput.value = formattedDate;
+                            calculateDaysOfUse(dateInput);
+
+                            flatpickr(dateInput, {
+                                enableTime: false,
+                                dateFormat: 'Y-m-d',
+                                minDate: dateInput.getAttribute('data-start-date') || null,
+                                onChange: function() {
+                                    calculateDaysOfUse(dateInput);
+                                },
+                            });
+
+                            if (daysOfUseInput && !daysOfUseInput.value) {
+                                daysOfUseInput.value = 1;
+                            }
+
+                        } else {
+                            cb.checked = false;
+
+                            quantityInput.setAttribute('disabled', true);
+                            quantityInput.value = '';
+
+                            dateInput.setAttribute('disabled', true);
+                            dateInput.value = '';
+
+                            if (daysOfUseInput) {
+                                daysOfUseInput.setAttribute('disabled', true);
+                                daysOfUseInput.value = '';
+                            }
                         }
                     }
                 });
@@ -209,9 +237,44 @@
                     const daysUsed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                     daysOfUseInput.value = Math.max(1, daysUsed);
                 } else {
-                    daysOfUseInput.value = ''; // Clear if invalid
+                    daysOfUseInput.value = '';
                 }
             }
+
+        });
+
+        // "Return All" checkbox logic
+        document.getElementById('return-all-checkbox').addEventListener('change', function() {
+            const isChecked = this.checked;
+
+            document.querySelectorAll('.return-checkbox').forEach(cb => {
+                if (!cb.disabled) {
+                    cb.checked = isChecked;
+                    cb.dispatchEvent(new Event('change'));
+
+                    const row = cb.closest('tr');
+                    const quantityInput = row.querySelector('.return-quantity');
+                    const maxQuantity = quantityInput.getAttribute('max');
+                    quantityInput.value = isChecked ? maxQuantity : '';
+
+                    const dateInput = row.querySelector('.return-date');
+                    const rentalEndDate = cb.dataset.rentalEndDate; // ✅ Correct now
+
+                    if (isChecked && dateInput) {
+                        const formatted = rentalEndDate ? rentalEndDate : new Date().toISOString().split(
+                            'T')[0];
+                        dateInput.value = formatted;
+                        calculateDaysOfUse(dateInput);
+                    }
+
+                    const daysOfUseInput = row.querySelector('.days-of-use');
+                    if (isChecked && daysOfUseInput) {
+                        daysOfUseInput.value = 1;
+                    } else if (daysOfUseInput) {
+                        daysOfUseInput.value = '';
+                    }
+                }
+            });
         });
     </script>
 @endpush

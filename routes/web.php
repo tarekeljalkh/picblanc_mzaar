@@ -11,6 +11,7 @@ use App\Http\Controllers\POSController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\YearController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -25,6 +26,14 @@ Route::get('/export-db', [DiskController::class, 'exportDatabase'])->name('admin
 Route::get('/dashboard', [DashbboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+
+    // Switch active year database (cookie based)
+    Route::get('/switch-year/{year}', [YearController::class, 'switch'])
+        ->name('switch.year');
+
+    // ✅ Create New Year Database
+    Route::post('/create-new-year', [YearController::class, 'create'])
+        ->name('year.create');
 
     // Category
     Route::post('/set-category', [CategoryController::class, 'setCategory'])->name('set.category');
@@ -47,6 +56,7 @@ Route::middleware('auth')->group(function () {
     // Invoices
     Route::get('/invoices/unpaid', [InvoiceController::class, 'unpaid'])->name('invoices.unpaid');
     Route::get('/invoices/paid', [InvoiceController::class, 'paid'])->name('invoices.paid');
+    Route::put('/invoices/{invoice}/note', [InvoiceController::class, 'updateNote'])->name('invoices.updateNote');
 
 
 
@@ -61,7 +71,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/invoices/{invoice}/process-returns', [InvoiceController::class, 'processReturns'])->name('invoices.process-returns');
     // Add new items
     Route::post('/invoices/{invoice}/add-items', [InvoiceController::class, 'addItems'])->name('invoices.add-items');
-
+    //Remove items
+    Route::get('/invoices/{invoice}/remove-items', [InvoiceController::class, 'showRemoveItems'])->name('invoices.removeItems');
+    Route::delete('/invoice-items/{item}', [InvoiceController::class, 'destroyItem'])->name('invoice-items.destroyItem');
+    Route::delete('/custom-items/{id}', [InvoiceController::class, 'destroyCustom'])->name('custom-items.destroy');
+    Route::delete('/additional-items/{id}', [InvoiceController::class, 'destroyAdditional'])->name('additional-items.destroy');
+    //Add new dates
+    Route::post('/invoices/{invoice}/add-dates', [InvoiceController::class, 'addDates'])->name('invoices.add-dates');
 
     // Drafts
     Route::resource('drafts', DraftController::class);

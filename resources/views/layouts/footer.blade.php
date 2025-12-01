@@ -10,7 +10,7 @@
                     <script>
                         document.write(new Date().getFullYear());
                     </script>
-                    , made with ❤️ by
+                    , made by
                     <a href="email:tarekeljalkh@gmail.com" target="_blank"
                         class="footer-link">TJ</a>
                 </div>

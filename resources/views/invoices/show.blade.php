@@ -34,8 +34,8 @@
                             <br>
                             <div class="text-heading">
                                 @if ($invoice->category->name === 'daily')
-                                    <p>Rental Start: {{ $invoice->rental_start_date->format('d/m/Y h:i A') }}</p>
-                                    <p>Rental End: {{ $invoice->rental_end_date->format('d/m/Y h:i A') }}</p>
+                                    <p>Rental Start: {{ $invoice->rental_start_date->format('d/m/Y') }}</p>
+                                    <p>Rental End: {{ $invoice->rental_end_date->format('d/m/Y') }}</p>
                                     <p>Rental Days: {{ $invoice->days }} day(s)</p>
                                 @else
                                     <p>Category: Season</p>
@@ -78,16 +78,26 @@
                         </thead>
                         <tbody>
                             <!-- Regular Items -->
-                            @foreach ($invoice->items as $item)
+                            @foreach ($invoice->invoiceItems as $item)
                                 <tr>
                                     <td class="text-nowrap text-heading">{{ $item->product->name }}</td>
                                     <td>${{ number_format($item->price, 2) }}</td>
                                     <td>{{ $item->quantity }}</td>
-                                    <td>${{ number_format($item->total_price, 2) }}</td>
+                                    @php
+                                        $from = $item->rental_start_date
+                                            ? \Carbon\Carbon::parse($item->rental_start_date)
+                                            : null;
+                                        $to = $item->rental_end_date
+                                            ? \Carbon\Carbon::parse($item->rental_end_date)
+                                            : null;
+                                        $days = $from && $to ? $to->diffInDays($from) + 1 : 0;
+                                        $totalPrice = $item->price * $item->quantity * $days;
+                                    @endphp
+                                    <td>${{ number_format($totalPrice, 2) }}</td>
                                     @if ($invoice->category->name === 'daily')
-                                        <td>{{ optional($item->rental_start_date)->format('d/m/Y h:i A') }}</td>
-                                        <td>{{ optional($item->rental_end_date)->format('d/m/Y h:i A') }}</td>
-                                        <td>{{ $item->days }}</td>
+                                        <td>{{ optional($item->rental_start_date)->format('d/m/Y') }}</td>
+                                        <td>{{ optional($item->rental_end_date)->format('d/m/Y') }}</td>
+                                        <td>{{ $days }}</td>
                                     @endif
                                 </tr>
                             @endforeach
@@ -106,9 +116,9 @@
 
                                     {{-- ✅ Display rental dates for "daily" category --}}
                                     @if ($invoice->category->name === 'daily')
-                                        <td>{{ $invoice->rental_start_date->format('d/m/Y h:i A') }}</td>
+                                        <td>{{ $invoice->rental_start_date->format('d/m/Y') }}</td>
                                         {{-- From Date --}}
-                                        <td>{{ $invoice->rental_end_date->format('d/m/Y h:i A') }}</td>
+                                        <td>{{ $invoice->rental_end_date->format('d/m/Y') }}</td>
                                         {{-- To Date --}}
                                         <td>{{ $invoice->days }}</td> {{-- Total Days --}}
                                     @endif
@@ -145,8 +155,8 @@
                                         <td>{{ $addedItem->quantity }}</td>
                                         <td>${{ number_format($addedItem->total_price, 2) }}</td>
                                         @if ($invoice->category->name === 'daily')
-                                            <td>{{ optional($addedItem->rental_start_date)->format('d/m/Y h:i A') }}</td>
-                                            <td>{{ optional($addedItem->rental_end_date)->format('d/m/Y h:i A') }}</td>
+                                            <td>{{ optional($addedItem->rental_start_date)->format('d/m/Y') }}</td>
+                                            <td>{{ optional($addedItem->rental_end_date)->format('d/m/Y') }}</td>
                                             <td>{{ $addedItem->days }}</td>
                                         @endif
                                     </tr>
@@ -191,7 +201,13 @@
                                         $rentalStartDate =
                                             optional($return->invoiceItem)->rental_start_date ??
                                             (optional($return->additionalItem)->rental_start_date ??
-                                                optional($return->customItem->invoice)->rental_start_date); // ✅ Added custom item rental date
+                                                (session('category') === 'season'
+                                                    ? (optional($return->customItem)->invoice
+                                                        ? optional($return->customItem->invoice)->created_at
+                                                        : null)
+                                                    : (optional($return->customItem)->invoice
+                                                        ? optional($return->customItem->invoice)->rental_start_date
+                                                        : null)));
                                     @endphp
                                     <tr>
                                         <td>
@@ -200,9 +216,9 @@
                                         <td>{{ $return->returned_quantity }}</td>
                                         <td>${{ number_format($cost, 2) }}</td>
                                         @if ($invoice->category->name === 'daily')
-                                            <td>{{ optional($rentalStartDate)->format('d/m/Y h:i A') }}</td>
+                                            <td>{{ optional($rentalStartDate)->format('d/m/Y') }}</td>
                                         @endif
-                                        <td>{{ optional($return->return_date)->format('d/m/Y h:i A') }}</td>
+                                        <td>{{ optional($return->return_date)->format('d/m/Y') }}</td>
                                         @if ($invoice->category->name === 'daily')
                                             <td>{{ $return->days_used }}</td>
                                         @endif
@@ -224,14 +240,46 @@
                                         <span class="me-2 h6">Salesperson:</span>
                                         <span>{{ $invoice->user->name ?? 'N/A' }}</span>
                                     </p>
-                                    <!-- Note -->
-                                    @if ($invoice->note)
-                                        <p><strong>NOTE:</strong> {{ $invoice->note }}</p>
+
+                                    <!-- Payment Type -->
+                                    @if ($invoice->payments && $invoice->payments->count())
+                                        <p><strong>Payment By:</strong>
+                                            {{ $invoice->payments->groupBy('payment_method')->map(function ($group, $method) {
+                                                    $total = $group->sum('amount');
+                                                    return ucwords(str_replace('_', ' ', $method)) . ' ($' . number_format($total, 2) . ')';
+                                                })->values()->join(', ') }}
+                                        </p>
                                     @endif
+
+                                    {{-- @if ($invoice->payments && $invoice->payments->count())
+                                        <p><strong>Payment By:</strong>
+                                            {{ $invoice->payments->pluck('payment_method')->unique()->join(', ') }}
+                                        </p>
+                                    @endif --}}
+
+                                    <!-- Note -->
+                                    <form action="{{ route('invoices.updateNote', $invoice->id) }}" method="POST"
+                                        class="d-flex align-items-center gap-2 mb-3">
+                                        @csrf
+                                        @method('PUT')
+
+                                        <label for="note" class="me-2 mb-0"><strong>Note:</strong></label>
+
+                                        <input type="text" name="note" id="note" class="form-control"
+                                            value="{{ $invoice->note }}" placeholder="Enter a note..."
+                                            style="max-width: 300px;" />
+
+                                        <button type="submit" class="btn btn-success">Update</button>
+                                    </form>
 
                                     <div class="mb-3">
                                         <span
-                                            class="badge {{ $invoice->payment_status === 'fully_paid' ? 'bg-success' : ($invoice->payment_status === 'partially_paid' ? 'bg-warning' : 'bg-danger') }}">
+                                            class="badge
+            {{ $invoice->payment_status === 'fully_paid'
+                ? 'bg-success'
+                : ($invoice->payment_status === 'partially_paid'
+                    ? 'bg-warning'
+                    : 'bg-danger') }}">
                                             {{ ucfirst(str_replace('_', ' ', $invoice->payment_status)) }}
                                         </span>
                                     </div>
@@ -255,7 +303,8 @@
                                     <p class="fw-medium mb-2">- ${{ number_format($totals['refundForUnusedDays'], 2) }}</p>
                                     <p class="fw-medium mb-2">${{ number_format($invoice->deposit, 2) }}</p>
                                     <p class="fw-medium mb-2">${{ number_format($totals['finalTotal'], 2) }}</p>
-                                    <p class="fw-medium mb-2">${{ number_format($invoice->paid_amount, 2) }}</p>
+                                    <p class="fw-medium mb-2">${{ number_format($invoice->payments->sum('amount'), 2) }}
+                                    </p>
                                     <p class="fw-medium mb-0 text-danger">${{ number_format($totals['balanceDue'], 2) }}
                                     </p>
                                 </td>
@@ -263,8 +312,6 @@
                         </tbody>
                     </table>
                 </div>
-
-
                 <hr class="mt-0 mb-6">
                 <div class="card-body p-0">
                     <div class="row">

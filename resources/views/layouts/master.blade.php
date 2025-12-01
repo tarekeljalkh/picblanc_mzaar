@@ -232,6 +232,15 @@
         }
     </script>
 
+    <script>
+        document.querySelectorAll('.year-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const year = this.dataset.year;
+                window.location.href = "/switch-year/" + year;
+            });
+        });
+    </script>
+
 
 </body>
 

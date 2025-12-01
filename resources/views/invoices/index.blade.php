@@ -25,12 +25,12 @@
                         <div class="col-md-3">
                             <label for="start_date" class="form-label">Start Date</label>
                             <input type="date" id="start_date" name="start_date" class="form-control"
-                                value="{{ request('start_date', \Carbon\Carbon::today()->toDateString()) }}">
+                                value="{{ request('start_date') }}">
                         </div>
                         <div class="col-md-3">
                             <label for="end_date" class="form-label">End Date</label>
                             <input type="date" id="end_date" name="end_date" class="form-control"
-                                value="{{ request('end_date', \Carbon\Carbon::today()->toDateString()) }}">
+                                value="{{ request('end_date') }}">
                         </div>
 
                         <!-- Status Filter -->
@@ -38,7 +38,8 @@
                             <label for="status" class="form-label">Status</label>
                             <select id="status" name="status" class="form-select">
                                 <option value="">All</option>
-                                <option value="not_returned" {{ request('status') === 'not_returned' ? 'selected' : '' }}>Not Returned</option>
+                                <option value="not_returned" {{ request('status') === 'not_returned' ? 'selected' : '' }}>
+                                    Not Returned</option>
                                 <option value="returned" {{ request('status') === 'returned' ? 'selected' : '' }}>Returned
                                 </option>
                                 <option value="draft" {{ request('status') === 'draft' ? 'selected' : '' }}>Draft</option>
@@ -60,10 +61,16 @@
                             </select>
                         </div>
 
-                        <!-- Submit Button -->
                         <div class="col-md-2 align-self-end">
+
+                            <!-- Clear Dates Button -->
+                            <button type="button" class="btn btn-secondary" id="clearDates">Clear</button>
+
+                            <!-- Submit Button -->
                             <button type="submit" class="btn btn-primary">Filter</button>
+
                         </div>
+
                     </div>
                 </form>
 
@@ -72,7 +79,9 @@
                     style="width:100%">
                     <thead>
                         <tr>
+                            <th>Invoice</th>
                             <th>Customer</th>
+                            <th>Phone</th>
                             <th>Payment Status</th>
                             @if (session('category') === 'daily')
                                 <th>From</th>
@@ -85,32 +94,49 @@
                     <tbody>
                         @foreach ($invoices as $invoice)
                             <tr>
+                                <td>{{ $invoice->id }}</td>
+
                                 <!-- Customer Name -->
                                 <td>{{ $invoice->customer->name }}</td>
 
-                                <!-- Payment Status -->
-                                <td>
-                                    <span class="badge
-                                        {{ $invoice->payment_status === 'fully_paid' ? 'bg-success' :
-                                        ($invoice->payment_status === 'partially_paid' ? 'bg-warning' : 'bg-danger') }}">
-                                        {{ ucfirst(str_replace('_', ' ', $invoice->payment_status)) }}
-                                    </span>
+                                <!-- Customer Phone -->
+                                <td> {{ $invoice->customer->phone }}
+                                    @if (!empty($invoice->customer->phone2))
+                                        <br>{{ $invoice->customer->phone2 }}
+                                    @endif
                                 </td>
 
+                                <!-- Payment Status -->
+                                <td>
+                                    @php
+                                        $paymentStatus = $invoice->payment_status;
+
+                                        $badgeClass = match ($paymentStatus) {
+                                            'fully_paid' => 'bg-success',
+                                            'partially_paid' => 'bg-warning',
+                                            'unpaid' => 'bg-danger',
+                                            default => 'bg-secondary',
+                                        };
+                                    @endphp
+
+                                    <span class="badge {{ $badgeClass }}">
+                                        {{ ucfirst(str_replace('_', ' ', $paymentStatus)) }}
+                                    </span>
+                                </td>
                                 <!-- Rental Dates (Daily Category Only) -->
                                 @if (session('category') === 'daily')
-                                    <td>{{ optional($invoice->rental_start_date)->format('d/m/Y h:i A') }}</td>
-                                    <td>{{ optional($invoice->rental_end_date)->format('d/m/Y h:i A') }}</td>
+                                    <td>{{ optional($invoice->rental_start_date)->format('d/m/Y') }}</td>
+                                    <td>{{ optional($invoice->rental_end_date)->format('d/m/Y') }}</td>
                                 @endif
 
-                                                <!-- Returned Status -->
-                <td>
-                    @if ($invoice->returned)
-                        <span class="badge bg-success">Yes</span>
-                    @else
-                        <span class="badge bg-danger">No</span>
-                    @endif
-                </td>
+                                <!-- Returned Status -->
+                                <td>
+                                    @if ($invoice->returned)
+                                        <span class="badge bg-success">Yes</span>
+                                    @else
+                                        <span class="badge bg-danger">No</span>
+                                    @endif
+                                </td>
 
 
                                 <!-- Actions -->
@@ -144,6 +170,13 @@
                 buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
                 responsive: true
             });
+
+            // Clear date fields on button click
+            $('#clearDates').on('click', function() {
+                $('#start_date').val('');
+                $('#end_date').val('');
+            });
+
         });
     </script>
 @endpush

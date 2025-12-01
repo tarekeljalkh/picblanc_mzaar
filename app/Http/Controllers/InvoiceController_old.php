@@ -116,7 +116,7 @@ class InvoiceController extends Controller
         }
 
         // Attach items to the invoice
-        $invoice->items()->saveMany($invoiceItems);
+        $invoice->invoiceItems()->saveMany($invoiceItems);
 
         return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
     }
@@ -130,7 +130,7 @@ class InvoiceController extends Controller
         $invoice = Invoice::with('items.product')->findOrFail($id);
 
         // Calculate subtotal, VAT, discount, and total
-        $subtotal = $invoice->items->sum(fn($item) => $item->quantity * $item->price);
+        $subtotal = $invoice->invoiceItems->sum(fn($item) => $item->quantity * $item->price);
         $vatTotal = ($subtotal * $invoice->total_vat) / 100;
         $discountTotal = ($subtotal * $invoice->total_discount) / 100;
         $total = $subtotal + $vatTotal - $discountTotal;
@@ -143,7 +143,7 @@ class InvoiceController extends Controller
      */
     public function edit($id)
     {
-        $invoice = Invoice::with('items')->findOrFail($id);
+        $invoice = Invoice::with('invoiceItems')->findOrFail($id);
         $customers = Customer::all();
         $products = Product::all();
 
@@ -188,7 +188,7 @@ class InvoiceController extends Controller
 
         // Recalculate subtotal, VAT, discount, and total for updated items
         $subtotal = 0;
-        $invoice->items()->delete();
+        $invoice->invoiceItems()->delete();
         $invoiceItems = [];
 
         foreach ($request->products as $index => $product_id) {
@@ -212,7 +212,7 @@ class InvoiceController extends Controller
         $invoice->save();
 
         // Attach updated items to the invoice
-        $invoice->items()->saveMany($invoiceItems);
+        $invoice->invoiceItems()->saveMany($invoiceItems);
 
         return redirect()->route('invoices.index')->with('success', 'Invoice updated successfully');
     }
@@ -242,7 +242,7 @@ class InvoiceController extends Controller
         $vatTotal = 0;
         $total = 0;
 
-        foreach ($invoice->items as $item) {
+        foreach ($invoice->invoiceItems as $item) {
             $itemSubtotal = $item->quantity * $item->price;
             $itemVat = ($itemSubtotal * $item->vat) / 100;
             $itemDiscount = ($itemSubtotal * $item->discount) / 100;
@@ -272,7 +272,7 @@ class InvoiceController extends Controller
         $total = 0;
 
         // Calculate totals for items
-        foreach ($invoice->items as $item) {
+        foreach ($invoice->invoiceItems as $item) {
             $itemSubtotal = $item->price * $item->quantity;
             $itemVat = ($itemSubtotal * $invoice->total_vat) / 100;
             $itemDiscount = ($itemSubtotal * $invoice->total_discount) / 100;
@@ -320,7 +320,7 @@ class InvoiceController extends Controller
                     continue;
                 }
 
-                $item = $invoice->items->find($key);
+                $item = $invoice->invoiceItems->find($key);
                 if (!$item) {
                     return redirect()->back()->withErrors([
                         "returns.{$key}.item_id" => "The selected item is invalid.",

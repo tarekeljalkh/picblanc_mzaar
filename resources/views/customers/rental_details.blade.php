@@ -74,7 +74,7 @@
                                 @endif
                                 <td>
                                     <ul>
-                                        @foreach ($invoice->items as $item)
+                                        @foreach ($invoice->invoiceItems as $item)
                                             <li>{{ $item->product->name }} ({{ $item->quantity }} pcs)</li>
                                         @endforeach
                                     </ul>
