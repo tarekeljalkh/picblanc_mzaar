@@ -28,7 +28,7 @@ Route::get('/dashboard', [DashbboardController::class, 'index'])->middleware(['a
 Route::middleware('auth')->group(function () {
 
     // Switch active year database (cookie based)
-    Route::get('/switch-year/{year}', [YearController::class, 'switch'])
+    Route::get('public/switch-year/{year}', [YearController::class, 'switch'])
         ->name('switch.year');
 
     // ✅ Create New Year Database
