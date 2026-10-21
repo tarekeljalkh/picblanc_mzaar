@@ -20,13 +20,24 @@ class CustomerDataTable extends DataTable
     public function dataTable(QueryBuilder $query): EloquentDataTable
     {
         return (new EloquentDataTable($query))
-            ->addColumn('action', function ($query) {
-                $edit = "<a href='" . route('customers.edit', $query->id) . "' class='btn btn-primary'><i class='fas fa-edit'></i></a>";
-                $delete = "<a href='" . route('customers.destroy', $query->id) . "' class='btn btn-danger delete-item ml-2'><i class='fas fa-trash'></i></a>";
-
-                return $edit . $delete;
+            ->addColumn('has_rentals', function (Customer $customer): string {
+                return $customer->invoices_exists
+                    ? '<span class="badge bg-success">Yes</span>'
+                    : '<span class="badge bg-danger">No</span>';
             })
-            ->rawColumns(['action'])
+            ->addColumn('action', function (Customer $customer): string {
+                $actions = '';
+
+                if ($customer->invoices_exists) {
+                    $actions .= '<a href="' . e(route('customers.rentalDetails', $customer->id)) . '" class="btn btn-sm btn-info">View Rentals</a> ';
+                }
+
+                $actions .= '<a href="' . e(route('customers.edit', $customer->id)) . '" class="btn btn-sm btn-warning">Edit</a> ';
+                $actions .= '<a href="' . e(route('customers.destroy', $customer->id)) . '" class="btn btn-sm btn-danger delete-item">Delete</a>';
+
+                return $actions;
+            })
+            ->rawColumns(['has_rentals', 'action'])
             ->setRowId('id');
     }
 
@@ -35,7 +46,7 @@ class CustomerDataTable extends DataTable
      */
     public function query(Customer $model): QueryBuilder
     {
-        return $model->newQuery();
+        return $model->newQuery()->withExists('invoices');
     }
 
     /**
@@ -44,21 +55,26 @@ class CustomerDataTable extends DataTable
     public function html(): HtmlBuilder
     {
         return $this->builder()
-            ->setTableId('customer-table')
+            ->setTableId('customersTable')
             ->columns($this->getColumns())
             ->minifiedAjax()
-            ->dom('Bfrtip')
-            ->orderBy(1)
-            ->selectStyleSingle()
+            ->orderBy(0)
+            ->parameters([
+                'dom' => 'Bfrtip',
+                'responsive' => true,
+                'processing' => true,
+                'serverSide' => true,
+                'autoWidth' => false,
+            ])
             ->buttons([
+                Button::make('copy'),
                 Button::make('excel'),
                 Button::make('csv'),
                 Button::make('pdf'),
                 Button::make('print'),
             ])
-            ->pageLength(10) // Set default page length to 10
-            ->lengthMenu([ [10, 15, 25, 50, -1], [10, 15, 25, 50, "All"] ]) // Custom page length options
-            ->responsive(true); // Enable responsive feature
+            ->pageLength(10)
+            ->lengthMenu([[10, 15, 25, 50], [10, 15, 25, 50]]);
     }
 
     /**
@@ -67,12 +83,10 @@ class CustomerDataTable extends DataTable
     public function getColumns(): array
     {
         return [
-            Column::make('id')->width(60),
             Column::make('name')->width(150),
-            Column::make('email'),
             Column::make('phone'),
             Column::make('address'),
-            Column::make('deposit_card'),
+            Column::computed('has_rentals')->title('Has Rentals')->searchable(false)->orderable(false),
             Column::computed('action')
             ->exportable(false)
             ->printable(false)

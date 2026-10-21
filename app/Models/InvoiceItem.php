@@ -74,6 +74,12 @@ class InvoiceItem extends Model
         return $this->returnDetails->sum('returned_quantity');
     }
 
+    /** Determine whether all units of this invoice item have been returned. */
+    public function getReturnedAttribute(): bool
+    {
+        return (int) $this->quantity <= (int) ($this->returned_quantity ?? 0);
+    }
+
     // Core Methods
 
     /**

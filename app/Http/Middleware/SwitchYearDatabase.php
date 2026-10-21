@@ -13,7 +13,7 @@ class SwitchYearDatabase
         $year = $request->cookie('active_year', date('Y'));
 
         // your database naming format
-        $dbName = 'picblanc_mzaar_' . $year;
+        $dbName = 'picblanc_mayrouba_' . $year;
 
         // switch the main mysql connection
         switchDatabaseTo($dbName);

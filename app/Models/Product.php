@@ -66,9 +66,4 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
-    public function rentals()
-{
-    return $this->hasMany(InvoiceItem::class, 'product_id');
-}
-
 }

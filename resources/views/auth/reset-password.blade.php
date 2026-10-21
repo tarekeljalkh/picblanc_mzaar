@@ -44,7 +44,7 @@
                   <label for="password" class="form-label">New Password</label>
                   <div class="input-group input-group-merge">
                     <input type="password" class="form-control" id="password" name="password" required autocomplete="new-password" />
-                    <span class="input-group-text cursor-pointer"><i class="bx bx-hide"></i></span>
+                  <span class="input-group-text cursor-pointer" data-password-toggle role="button" tabindex="0" aria-label="Show password"><i class="bx bx-hide"></i></span>
                   </div>
                   @error('password')
                     <span class="text-danger">{{ $message }}</span>
@@ -56,7 +56,7 @@
                   <label for="password_confirmation" class="form-label">Confirm Password</label>
                   <div class="input-group input-group-merge">
                     <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required autocomplete="new-password" />
-                    <span class="input-group-text cursor-pointer"><i class="bx bx-hide"></i></span>
+                  <span class="input-group-text cursor-pointer" data-password-toggle role="button" tabindex="0" aria-label="Show password"><i class="bx bx-hide"></i></span>
                   </div>
                   @error('password_confirmation')
                     <span class="text-danger">{{ $message }}</span>

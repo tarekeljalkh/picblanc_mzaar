@@ -1,25 +1,20 @@
 @echo off
-:: Navigate to the directory where the .bat file is located
+setlocal
 cd /d "%~dp0"
 
-:: Fetch the latest changes from the remote repository
-echo Checking for updates...
-git fetch origin master
+echo Fetching latest main...
+git fetch origin main
+if errorlevel 1 goto failed
 
-:: Compare the local and remote branches
-for /f "tokens=*" %%i in ('git rev-parse HEAD') do set LOCAL_HASH=%%i
-for /f "tokens=*" %%i in ('git rev-parse origin/master') do set REMOTE_HASH=%%i
+echo Updating client files...
+git checkout -f -B main origin/main
+if errorlevel 1 goto failed
 
-if "%LOCAL_HASH%"=="%REMOTE_HASH%" (
-    echo No updates found. Your repository is up-to-date.
-) else (
-    echo Updates found. Pulling changes...
-    git pull origin master
-    if %errorlevel%==0 (
-        echo System updated successfully.
-    ) else (
-        echo An error occurred while pulling changes. Please check your setup.
-    )
-)
-
+echo Client updated successfully.
 pause
+exit /b 0
+
+:failed
+echo Update failed. Check the Git/network setup.
+pause
+exit /b 1

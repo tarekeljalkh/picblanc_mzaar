@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\DataTables\ProductDataTable;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
@@ -12,7 +13,7 @@ class ProductController extends Controller
      * Display a listing of the resource.
      */
 
-    public function index()
+    public function index(ProductDataTable $dataTable)
     {
         // Retrieve the selected category from the session, default to 'daily'
         $selectedCategory = session('category', 'daily');
@@ -20,11 +21,9 @@ class ProductController extends Controller
         // Fetch the category from the database
         $category = Category::where('name', $selectedCategory)->firstOrFail();
 
-        // Fetch products that belong to the selected category
-        $products = Product::where('category_id', $category->id)->get();
-
-        // Pass the products and selected category to the view
-        return view('products.index', compact('products'));
+        return $dataTable->render('products.index', [
+            'productCount' => Product::where('category_id', $category->id)->count(),
+        ]);
     }
 
 
@@ -125,11 +124,12 @@ class ProductController extends Controller
 
     public function rentalDetails($id)
     {
-        // Fetch the product
-        $product = Product::with(['rentals.invoice.customer'])->findOrFail($id);
+        $product = Product::with([
+            'invoiceItems.invoice.customer',
+            'invoiceItems.returnDetails',
+        ])->findOrFail($id);
 
-        // Get the rentals (invoice items) for this product with related invoice and customer
-        $rentals = $product->rentals()->with('invoice.customer')->get();
+        $rentals = $product->invoiceItems;
 
         return view('products.rental-details', compact('product', 'rentals'));
     }

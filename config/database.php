@@ -47,7 +47,11 @@ return [
             'driver' => 'mysql',
             'host' => env('DB_HOST'),
             'port' => env('DB_PORT'),
-            'database' => env('DB_YEAR_PREFIX') . env('DB_YEAR_ACTIVE'),
+            // Use year-specific databases when configured; otherwise fall back
+            // to the standard DB_DATABASE setting used by local installations.
+            'database' => env('DB_YEAR_ACTIVE')
+                ? env('DB_YEAR_PREFIX', '') . env('DB_YEAR_ACTIVE')
+                : env('DB_DATABASE'),
             'username' => env('DB_USERNAME'),
             'password' => env('DB_PASSWORD'),
             'charset' => 'utf8mb4',

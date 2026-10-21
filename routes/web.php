@@ -6,7 +6,6 @@ use App\Http\Controllers\DashbboardController;
 use App\Http\Controllers\DiskController;
 use App\Http\Controllers\DraftController;
 use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\InvoiceDraftController;
 use App\Http\Controllers\POSController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
@@ -19,7 +18,9 @@ Route::get('/', function () {
 });
 
 // Backup Database
-Route::get('/export-db', [DiskController::class, 'exportDatabase'])->name('admin.exportDatabase');
+Route::get('/export-db', [DiskController::class, 'exportDatabase'])
+    ->middleware(['auth', 'admin'])
+    ->name('admin.exportDatabase');
 
 
 
@@ -28,7 +29,7 @@ Route::get('/dashboard', [DashbboardController::class, 'index'])->middleware(['a
 Route::middleware('auth')->group(function () {
 
     // Switch active year database (cookie based)
-    Route::get('public/switch-year/{year}', [YearController::class, 'switch'])
+    Route::get('/switch-year/{year}', [YearController::class, 'switch'])
         ->name('switch.year');
 
     // ✅ Create New Year Database
@@ -93,7 +94,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/trial-balance/products', [DashbboardController::class, 'trialBalanceByProducts'])->name('trialbalance.products');
 
     // Users
-    Route::resource('users', UserController::class);
+    Route::resource('users', UserController::class)->middleware('admin');
 });
 
 require __DIR__ . '/auth.php';

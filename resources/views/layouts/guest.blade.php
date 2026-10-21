@@ -12,13 +12,10 @@
     <!-- Core CSS -->
     <link rel="stylesheet" href="{{ asset('assets/vendor/css/core.css') }}" />
     <link rel="stylesheet" href="{{ asset('assets/vendor/css/theme-default.css') }}" />
-    <link rel="stylesheet" href="{{ asset('assets/css/demo.css') }}" />
-
-    <!-- Vendors CSS -->
-    <link rel="stylesheet" href="{{ asset('assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.css') }}" />
-
+    <link rel="stylesheet" href="{{ asset('assets/vendor/fonts/boxicons.css') }}" />
     <!-- Page CSS -->
     <link rel="stylesheet" href="{{ asset('assets/vendor/css/pages/page-auth.css') }}" />
+    @stack('styles')
 
     <!-- Helpers -->
     <script src="{{ asset('assets/vendor/js/helpers.js') }}"></script>
@@ -30,14 +27,22 @@
     @yield('content')
     <!-- / Content -->
 
-    <!-- Core JS -->
-    <script src="{{ asset('assets/vendor/libs/jquery/jquery.js') }}"></script>
-    <script src="{{ asset('assets/vendor/libs/popper/popper.js') }}"></script>
-    <script src="{{ asset('assets/vendor/js/bootstrap.js') }}"></script>
-    <script src="{{ asset('assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.js') }}"></script>
-    <script src="{{ asset('assets/vendor/js/menu.js') }}"></script>
+    @stack('scripts')
+    <script>
+      document.querySelectorAll('.form-password-toggle').forEach(function (wrapper) {
+        const input = wrapper.querySelector('input[type="password"], input[type="text"]');
+        const toggle = wrapper.querySelector('[data-password-toggle]');
 
-    <!-- Main JS -->
-    <script src="{{ asset('assets/js/main.js') }}"></script>
+        if (!input || !toggle) return;
+
+        toggle.addEventListener('click', function () {
+          const isPassword = input.type === 'password';
+          input.type = isPassword ? 'text' : 'password';
+          toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+          toggle.querySelector('i')?.classList.toggle('bx-hide', !isPassword);
+          toggle.querySelector('i')?.classList.toggle('bx-show', isPassword);
+        });
+      });
+    </script>
   </body>
 </html>

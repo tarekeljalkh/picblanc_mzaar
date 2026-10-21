@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\DataTables\CustomerDataTable;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Traits\FileUploadTrait;
+use App\DataTables\CustomerDataTable;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -18,9 +18,9 @@ class CustomerController extends Controller
      */
     public function index(CustomerDataTable $dataTable)
     {
-        //return $dataTable->render('customers.index');
-        $customers = Customer::all();
-        return view('customers.index', compact('customers'));
+        return $dataTable->render('customers.index', [
+            'customerCount' => Customer::count(),
+        ]);
     }
 
     public function getCustomer($id)
@@ -106,14 +106,14 @@ class CustomerController extends Controller
                 'unique:customers,phone2,' . $id,      // Exclude current customer ID for phone2
                 'different:phone'                      // Ensure phone2 is different from phone
             ],
-                    'address' => 'required|string',
+                    'address' => 'nullable|string',
             'deposit_card' => 'nullable|image|max:2048', // Optional image file upload
         ]);
 
         $customer = Customer::findOrFail($id);
 
         // Handle image file upload, replace old file if a new one is uploaded
-        $filePath = $this->uploadImage($request, 'deposit_card', $customer->file, '/uploads/customers');
+        $filePath = $this->uploadImage($request, 'deposit_card', $customer->deposit_card, '/uploads/customers');
 
         // Update customer details
         $customer->name = $request->name;
@@ -151,6 +151,11 @@ class CustomerController extends Controller
 
     public function rentalDetails(Request $request, $id)
     {
+        $dateFilters = $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
         // Find the customer by ID
         $customer = Customer::findOrFail($id);
 
@@ -164,9 +169,9 @@ class CustomerController extends Controller
             ]);
 
         // Apply date filtering based on rental period, not `created_at`
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $startDate = Carbon::parse($request->input('start_date'))->startOfDay();
-            $endDate = Carbon::parse($request->input('end_date'))->endOfDay();
+        if (!empty($dateFilters['start_date']) && !empty($dateFilters['end_date'])) {
+            $startDate = Carbon::parse($dateFilters['start_date'])->startOfDay();
+            $endDate = Carbon::parse($dateFilters['end_date'])->endOfDay();
 
             $invoicesQuery->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('rental_start_date', [$startDate, $endDate])

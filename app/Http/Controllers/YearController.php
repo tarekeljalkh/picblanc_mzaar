@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\NewYearService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class YearController extends Controller
@@ -18,19 +19,14 @@ class YearController extends Controller
             return redirect()->back()->with('error', 'Invalid year format.');
         }
 
-        // Remove old cookie (optional but recommended)
-        $forgetCookie = cookie()->forget('active_year');
-
         // Save new active year in a cookie for 1 year
         $cookie = cookie('active_year', $year, 60 * 24 * 365);
 
         return redirect()
             ->route('dashboard')
-            ->withCookie($forgetCookie)
             ->withCookie($cookie)
             ->with('success', "Switched to year $year successfully!");
     }
-
 
     /**
      * Create a new year DB
@@ -43,7 +39,7 @@ class YearController extends Controller
         ]);
 
         $year = (int) $request->year;
-        $prefix = env('DB_YEAR_PREFIX'); // e.g., picblanc_mzaar_
+        $prefix = env('DB_YEAR_PREFIX'); // e.g., picblanc_mayrouba_
         $newDb = $prefix . $year;
 
         // Check if database already exists
@@ -55,6 +51,7 @@ class YearController extends Controller
         // Create (copy current DB → new DB) + truncate (invoices, payments, returns...)
         try {
             $service->createNewYear($year);
+            Cache::forget('available_year_databases');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', "Error creating database: " . $e->getMessage());
         }

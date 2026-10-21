@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class DiskController extends Controller
 {
@@ -13,11 +13,13 @@ class DiskController extends Controller
         $fileName = 'database_backup_' . Carbon::now()->format('Y_m_d_H_i_s') . '.sql';
         $storagePath = storage_path('app/' . $fileName);
 
-        $database = env('DB_DATABASE');
-        $username = env('DB_USERNAME');
-        $password = env('DB_PASSWORD');
-        $host = env('DB_HOST', '127.0.0.1');
-        $dbConnection = env('DB_CONNECTION');
+        $connection = DB::connection();
+        $connectionConfig = config('database.connections.' . $connection->getName());
+        $database = $connection->getDatabaseName();
+        $username = $connectionConfig['username'] ?? '';
+        $password = $connectionConfig['password'] ?? '';
+        $host = $connectionConfig['host'] ?? '127.0.0.1';
+        $dbConnection = $connection->getDriverName();
 
         $command = '';
 
@@ -56,7 +58,12 @@ class DiskController extends Controller
         exec($command . ' 2>&1', $output, $result);
 
         if ($result !== 0) {
-            return response()->json(['error' => 'Failed to export the database. Detailed Output: ' . implode("\n", $output)], 500);
+            Log::error('Database export failed.', [
+                'connection' => $connection->getName(),
+                'output' => $output,
+            ]);
+
+            return response()->json(['error' => 'Failed to export the database.'], 500);
         }
 
         // Return the backup file as a download response

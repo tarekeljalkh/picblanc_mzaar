@@ -14,12 +14,12 @@
     <div class="col-md">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="m-0">Invoices ({{ $invoices->count() }})</h5>
+                <h5 class="m-0">Invoices</h5>
                 <a href="{{ route('invoices.create') }}" class="btn btn-primary">Create New Invoice</a>
             </div>
             <div class="card-body">
                 <!-- Filter Form -->
-                <form method="GET" action="{{ route('invoices.index') }}" class="mb-3">
+                <form id="invoice-filters" method="GET" action="{{ route('invoices.index') }}" class="mb-3">
                     <div class="row">
                         <!-- Date Filters -->
                         <div class="col-md-3">
@@ -63,8 +63,8 @@
 
                         <div class="col-md-2 align-self-end">
 
-                            <!-- Clear Dates Button -->
-                            <button type="button" class="btn btn-secondary" id="clearDates">Clear</button>
+                            <!-- Clear all filters -->
+                            <button type="button" class="btn btn-secondary" id="clearFilters">Clear</button>
 
                             <!-- Submit Button -->
                             <button type="submit" class="btn btn-primary">Filter</button>
@@ -75,87 +75,10 @@
                 </form>
 
                 <!-- Invoice Table -->
-                <table id="invoicesTable" class="table table-striped table-bordered dt-responsive nowrap"
-                    style="width:100%">
-                    <thead>
-                        <tr>
-                            <th>Invoice</th>
-                            <th>Customer</th>
-                            <th>Phone</th>
-                            <th>Payment Status</th>
-                            @if (session('category') === 'daily')
-                                <th>From</th>
-                                <th>To</th>
-                            @endif
-                            <th>Returned</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($invoices as $invoice)
-                            <tr>
-                                <td>{{ $invoice->id }}</td>
-
-                                <!-- Customer Name -->
-                                <td>{{ $invoice->customer->name }}</td>
-
-                                <!-- Customer Phone -->
-                                <td> {{ $invoice->customer->phone }}
-                                    @if (!empty($invoice->customer->phone2))
-                                        <br>{{ $invoice->customer->phone2 }}
-                                    @endif
-                                </td>
-
-                                <!-- Payment Status -->
-                                <td>
-                                    @php
-                                        $paymentStatus = $invoice->payment_status;
-
-                                        $badgeClass = match ($paymentStatus) {
-                                            'fully_paid' => 'bg-success',
-                                            'partially_paid' => 'bg-warning',
-                                            'unpaid' => 'bg-danger',
-                                            default => 'bg-secondary',
-                                        };
-                                    @endphp
-
-                                    <span class="badge {{ $badgeClass }}">
-                                        {{ ucfirst(str_replace('_', ' ', $paymentStatus)) }}
-                                    </span>
-                                </td>
-                                <!-- Rental Dates (Daily Category Only) -->
-                                @if (session('category') === 'daily')
-                                    <td>{{ optional($invoice->rental_start_date)->format('d/m/Y') }}</td>
-                                    <td>{{ optional($invoice->rental_end_date)->format('d/m/Y') }}</td>
-                                @endif
-
-                                <!-- Returned Status -->
-                                <td>
-                                    @if ($invoice->returned)
-                                        <span class="badge bg-success">Yes</span>
-                                    @else
-                                        <span class="badge bg-danger">No</span>
-                                    @endif
-                                </td>
-
-
-                                <!-- Actions -->
-                                <td>
-                                    <a href="{{ route('invoices.show', $invoice->id) }}"
-                                        class="btn btn-info btn-sm">Show</a>
-                                    <a href="{{ route('invoices.edit', $invoice->id) }}"
-                                        class="btn btn-warning btn-sm">Edit</a>
-                                    <a href="{{ route('invoices.print', $invoice->id) }}"
-                                        class="btn btn-primary btn-sm">Print</a>
-                                    @if (auth()->user()->role === 'admin')
-                                        <a href="{{ route('invoices.destroy', $invoice->id) }}"
-                                            class="btn btn-danger btn-sm delete-item">Delete</a>
-                                    @endif
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                {!! $dataTable->table([
+                    'class' => 'table table-striped table-bordered dt-responsive nowrap',
+                    'style' => 'width:100%',
+                ]) !!}
             </div>
         </div>
     </div>
@@ -163,20 +86,19 @@
 @endsection
 
 @push('scripts')
+    {!! $dataTable->scripts() !!}
     <script>
-        $(document).ready(function() {
-            $('#invoicesTable').DataTable({
-                dom: 'Bfrtip',
-                buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-                responsive: true
-            });
+        $('#invoice-filters').on('submit', function(event) {
+            event.preventDefault();
 
-            // Clear date fields on button click
-            $('#clearDates').on('click', function() {
-                $('#start_date').val('');
-                $('#end_date').val('');
-            });
+            const query = new URLSearchParams(new FormData(this));
+            window.history.replaceState({}, '', this.action + '?' + query.toString());
+            $('#invoicesTable').DataTable().ajax.reload();
+        });
 
+        $('#clearFilters').on('click', function() {
+            $('#invoice-filters')[0].reset();
+            $('#invoice-filters').trigger('submit');
         });
     </script>
 @endpush

@@ -230,17 +230,34 @@
                 // Initialize Flatpickr for rental dates (only if required for 'daily')
                 const category = '{{ session('category', 'daily') }}'; // Retrieve the category from the session
                 if (category === 'daily') {
-                    flatpickr("#rental-start-date, #rental-end-date", {
+                    const datePickerOptions = {
                         dateFormat: "Y-m-d",
                         altInput: true,
-                        altFormat: "F j, Y",
+                        altFormat: "d/m/Y",
                         allowInput: true,
                         onChange: function() {
                             calculateDays();
                             calculateTotalAmount();
                             validateCheckoutButton();
                         },
+                    };
+
+                    // Default both dates to today for one-day rentals. The
+                    // user can still select different dates from the calendar.
+                    const today = '{{ now()->format('Y-m-d') }}';
+
+                    flatpickr("#rental-start-date", {
+                        ...datePickerOptions,
+                        defaultDate: today,
                     });
+                    flatpickr("#rental-end-date", {
+                        ...datePickerOptions,
+                        defaultDate: today,
+                    });
+
+                    // Flatpickr does not trigger onChange for default values.
+                    // Calculate the initial one-day rental immediately.
+                    calculateDays();
                 }
 
                 // Validate checkout button
@@ -504,8 +521,9 @@
                             payment_amount: $('#payment-amount').val(),
                         },
                         success: function(response) {
-                            window.location.href = '{{ route('invoices.show', ':id') }}'.replace(
+                            const printUrl = '{{ route('invoices.print', ':id') }}'.replace(
                                 ':id', response.invoice_id);
+                            window.location.href = printUrl + '?return_to_invoice=1';
                         },
                         error: function() {
                             alert('Error processing checkout.');

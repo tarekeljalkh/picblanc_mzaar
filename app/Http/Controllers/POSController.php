@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class POSController extends Controller
 {
@@ -35,6 +36,7 @@ class POSController extends Controller
     public function checkout(Request $request)
     {
         $categoryName = session('category', 'daily');
+        $category = Category::where('name', $categoryName)->firstOrFail();
 
         $rules = [
             'customer_id' => 'nullable|exists:customers,id',
@@ -42,7 +44,10 @@ class POSController extends Controller
             'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
             'customer_address' => 'nullable|string|max:255|required_without:customer_id',
             'cart' => 'required|array|min:1',
-            'cart.*.id' => 'nullable|exists:products,id',
+            'cart.*.id' => [
+                'nullable',
+                Rule::exists('products', 'id')->where('category_id', $category->id),
+            ],
             'cart.*.quantity' => 'required|integer|min:1',
             'cart.*.price' => 'required|numeric|min:0',
             'cart.*.name' => 'nullable|string|max:255',
@@ -56,10 +61,25 @@ class POSController extends Controller
         if ($categoryName === 'daily') {
             $rules['rental_start_date'] = 'required|date';
             $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
-            $rules['rental_days'] = 'required|integer|min:1';
         }
 
-        $request->validate($rules);
+        $validated = $request->validate($rules);
+        $rentalDays = null;
+        if ($categoryName === 'daily') {
+            $start = Carbon::parse($validated['rental_start_date']);
+            $end = Carbon::parse($validated['rental_end_date']);
+            $rentalDays = max(1, (int) ceil($start->diffInMinutes($end) / 1440) + 1);
+        }
+
+        $productIds = collect($request->cart)
+            ->pluck('id')
+            ->filter()
+            ->unique()
+            ->values();
+        $productsById = Product::where('category_id', $category->id)
+            ->whereIn('id', $productIds)
+            ->get()
+            ->keyBy('id');
 
         try {
             DB::beginTransaction();
@@ -72,8 +92,6 @@ class POSController extends Controller
                     'address' => $request->customer_address,
                 ]);
 
-            $category = Category::where('name', $categoryName)->firstOrFail();
-
             $subtotal = 0;
             $invoiceItems = [];
             $customItems = [];
@@ -82,13 +100,16 @@ class POSController extends Controller
                 $quantity = $cartItem['quantity'];
                 $price = $cartItem['price'];
 
-                // ✅ Adjusted Price Calculation
-                $totalPrice = ($categoryName === 'daily' && empty($cartItem['id']))
-                    ? $quantity * $price * $request->rental_days // For custom items
-                    : (($categoryName === 'daily') ? $quantity * $price * $request->rental_days : $quantity * $price); // For products
+                if (!empty($cartItem['id'])) {
+                    $product = $productsById->get($cartItem['id']);
+                    $price = $product->price;
+                }
+
+                $totalPrice = $categoryName === 'daily'
+                    ? $quantity * $price * $rentalDays
+                    : $quantity * $price;
 
                 if (!empty($cartItem['id'])) {
-                    $product = Product::findOrFail($cartItem['id']);
                     $invoiceItems[] = new InvoiceItem([
                         'product_id' => $product->id,
                         'quantity' => $quantity,
@@ -96,7 +117,7 @@ class POSController extends Controller
                         'total_price' => $totalPrice,
                         'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
                         'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-                        'days' => $categoryName === 'daily' ? $request->rental_days : null,
+                        'days' => $rentalDays,
                         'returned_quantity' => 0,
                         'added_quantity' => 0,
                     ]);
@@ -109,7 +130,7 @@ class POSController extends Controller
                         'quantity' => $quantity,
                         'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
                         'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-                        'days' => $categoryName === 'daily' ? $request->rental_days : null,
+                        'days' => $rentalDays,
                     ]);
                 }
 
@@ -138,7 +159,7 @@ class POSController extends Controller
             if ($categoryName === 'daily') {
                 $invoiceData['rental_start_date'] = $request->rental_start_date;
                 $invoiceData['rental_end_date'] = $request->rental_end_date;
-                $invoiceData['days'] = $request->rental_days;
+                $invoiceData['days'] = $rentalDays;
             }
 
             $invoice = Invoice::create($invoiceData);

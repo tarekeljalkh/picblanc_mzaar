@@ -44,8 +44,8 @@
                 <ul class="dropdown-menu" aria-labelledby="yearSwitcherBtn" style="cursor:pointer;">
                     @foreach ($years as $year)
                         <li>
-                            <a class="dropdown-item year-option {{ $activeYear == $year ? 'active' : '' }}"
-                                data-year="{{ $year }}">
+                            <a class="dropdown-item {{ $activeYear == $year ? 'active' : '' }}"
+                                href="{{ route('switch.year', ['year' => $year]) }}">
                                 {{ $year }}
                             </a>
                         </li>

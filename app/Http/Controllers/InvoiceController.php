@@ -16,9 +16,11 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\FileUploadTrait;
+use App\DataTables\InvoicesDataTable;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class InvoiceController extends Controller
 {
@@ -28,83 +30,16 @@ class InvoiceController extends Controller
      * Display a listing of the resource.
      */
 
-    public function index(Request $request)
+    public function index(Request $request, InvoicesDataTable $dataTable)
     {
-        $selectedCategory = session('category', 'daily');
-        $status = $request->query('status');
-        $paymentStatus = $request->query('payment_status');
-        $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'status' => 'nullable|in:draft,returned,not_returned',
+            'payment_status' => 'nullable|in:fully_paid,partially_paid,unpaid',
+        ]);
 
-        $hasDateFilter = $startDate && $endDate;
-
-        // ✅ Convert to Carbon Dates only if provided
-        if ($hasDateFilter) {
-            $startDate = Carbon::parse($startDate)->startOfDay();
-            $endDate = Carbon::parse($endDate)->endOfDay();
-        }
-
-        // ✅ Fetch Invoices with Eager Loading
-        $invoices = Invoice::with([
-            'customer',
-            'invoiceItems',
-            'customItems',
-            'additionalItems',
-            'payments',
-            'category',
-            'returnDetails.invoiceItem',
-            'returnDetails.additionalItem',
-            'returnDetails.customItem',
-        ])
-            ->whereHas('category', function ($query) use ($selectedCategory) {
-                $query->where('name', $selectedCategory);
-            });
-
-        // ✅ Apply Date Filtering Based on Category Type
-        if ($hasDateFilter) {
-            if ($selectedCategory === 'season') {
-                $invoices->whereBetween('created_at', [$startDate, $endDate]);
-            } else {
-                $invoices->where(function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween('rental_start_date', [$startDate, $endDate])
-                        ->orWhereBetween('rental_end_date', [$startDate, $endDate])
-                        ->orWhere(function ($query) use ($startDate, $endDate) {
-                            $query->where('rental_start_date', '<=', $endDate)
-                                ->where('rental_end_date', '>=', $startDate)
-                                ->where(function ($q) use ($startDate, $endDate) {
-                                    $q->where('rental_start_date', '>=', $startDate)
-                                        ->where('rental_end_date', '<=', $endDate);
-                                });
-                        });
-                });
-            }
-        }
-
-        // ✅ Fetch Filtered Invoices
-        $invoices = $invoices->get();
-
-        // ✅ Apply Payment Status Filtering Using Accessor
-        if ($paymentStatus) {
-            $invoices = $invoices->filter(function ($invoice) use ($paymentStatus) {
-                return $invoice->payment_status === $paymentStatus;
-            })->values(); // Reset keys
-        }
-
-        // ✅ Apply Returned / Not Returned Status Filtering
-        if ($status === 'returned') {
-            $invoices = $invoices->filter(fn($invoice) => $invoice->returned);
-        } elseif ($status === 'not_returned') {
-            $invoices = $invoices->filter(fn($invoice) => !$invoice->returned);
-        }
-
-        return view('invoices.index', compact(
-            'invoices',
-            'selectedCategory',
-            'status',
-            'paymentStatus',
-            'startDate',
-            'endDate'
-        ));
+        return $dataTable->render('invoices.index');
     }
 
     /**
@@ -124,6 +59,7 @@ class InvoiceController extends Controller
     public function store(Request $request)
     {
         $categoryName = session('category', 'daily');
+        $category = Category::where('name', $categoryName)->firstOrFail();
 
         // Validation rules
         $rules = [
@@ -132,7 +68,10 @@ class InvoiceController extends Controller
             'customer_phone' => 'nullable|string|max:255|required_without:customer_id',
             'customer_address' => 'nullable|string|max:255|required_without:customer_id',
             'products' => 'nullable|array',
-            'products.*' => 'nullable|exists:products,id',
+            'products.*' => [
+                'nullable',
+                Rule::exists('products', 'id')->where('category_id', $category->id),
+            ],
             'quantities' => 'required|array|min:1',
             'quantities.*' => 'integer|min:1',
             'prices' => 'required|array|min:1',
@@ -152,12 +91,17 @@ class InvoiceController extends Controller
         if ($categoryName === 'daily') {
             $rules['rental_start_date'] = 'required|date';
             $rules['rental_end_date'] = 'required|date|after_or_equal:rental_start_date';
-            $rules['days'] = 'required|integer|min:1';
         }
 
         try {
             // Validation
             $validated = $request->validate($rules);
+            $rentalDays = null;
+            if ($categoryName === 'daily') {
+                $start = Carbon::parse($validated['rental_start_date']);
+                $end = Carbon::parse($validated['rental_end_date']);
+                $rentalDays = max(1, (int) ceil($start->diffInMinutes($end) / 1440) + 1);
+            }
 
             DB::beginTransaction();
 
@@ -172,8 +116,11 @@ class InvoiceController extends Controller
                 ]);
             }
 
-            // Retrieve Category
-            $category = Category::where('name', $categoryName)->firstOrFail();
+            $productIds = collect($validated['products'] ?? [])->filter()->unique()->values();
+            $productsById = Product::where('category_id', $category->id)
+                ->whereIn('id', $productIds)
+                ->get()
+                ->keyBy('id');
 
             $subtotal = 0;
             $invoiceItems = [];
@@ -183,12 +130,12 @@ class InvoiceController extends Controller
             if (!empty($request->products)) {
                 foreach ($request->products as $index => $productId) {
                     if (!empty($productId)) {
-                        $product = Product::findOrFail($productId);
+                        $product = $productsById->get($productId);
                         $quantity = $request->quantities[$index];
-                        $price = $request->prices[$index];
+                        $price = $product->price;
 
                         $totalPrice = ($categoryName === 'daily')
-                            ? $quantity * $price * $request->days
+                            ? $quantity * $price * $rentalDays
                             : $quantity * $price;
 
                         $invoiceItems[] = new InvoiceItem([
@@ -198,7 +145,7 @@ class InvoiceController extends Controller
                             'total_price' => $totalPrice,
                             'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
                             'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-                            'days' => $categoryName === 'daily' ? $request->days : null,
+                            'days' => $rentalDays,
                             'returned_quantity' => 0,
                             'added_quantity' => 0,
                         ]);
@@ -235,7 +182,7 @@ class InvoiceController extends Controller
                 'status' => 'active',  // You can adjust this based on the status
                 'rental_start_date' => $categoryName === 'daily' ? $request->rental_start_date : null,
                 'rental_end_date' => $categoryName === 'daily' ? $request->rental_end_date : null,
-                'days' => $categoryName === 'daily' ? $request->days : null,
+                    'days' => $rentalDays,
                 'note' => $request->note,
                 'user_id' => auth()->id(), // Assuming the user is authenticated
             ]);
@@ -255,7 +202,8 @@ class InvoiceController extends Controller
             }
 
             DB::commit();
-            return redirect()->route('invoices.show', $invoice->id)->with('success', 'Invoice created successfully');
+            return redirect()->route('invoices.show', $invoice->id)
+                ->with('success', 'Invoice created successfully');
         } catch (\Exception $e) {
             DB::rollBack();
             //  Log::error('Store Invoice Exception:', [
@@ -566,7 +514,9 @@ class InvoiceController extends Controller
         // Ensure totals are calculated using the revised logic
         $totals = $invoice->calculateTotals();
 
-        return view('invoices.print', compact('invoice', 'totals'));
+        $returnToInvoice = request()->boolean('return_to_invoice');
+
+        return view('invoices.print', compact('invoice', 'totals', 'returnToInvoice'));
     }
 
     /**

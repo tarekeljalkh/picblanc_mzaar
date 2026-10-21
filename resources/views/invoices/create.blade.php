@@ -31,7 +31,7 @@
                             <label for="select_customer" class="col-md-2 col-form-label">Select Existing Customer</label>
                             <div class="col-md-10">
                                 <select class="form-select" id="select_customer" name="customer_id">
-                                    <option value="">Select Existing Customer</option>
+                                    <option value="" selected>Select Existing Customer</option>
                                     @foreach ($customers as $customer)
                                         <option value="{{ $customer->id }}" data-name="{{ $customer->name }}"
                                             data-phone="{{ $customer->phone }}" data-address="{{ $customer->address }}">
@@ -263,11 +263,9 @@
     </div>
 
 
-    {{-- Include jQuery, Flatpickr, and Select2 CDN --}}
-    <script src="{{ asset('assets/js/jquery-3.6.0.min.js') }}"></script>
+    @push('scripts')
     <script src="{{ asset('assets/vendor/libs/flatpickr/flatpickr.js') }}"></script>
     <script src="{{ asset('assets/vendor/libs/select2/select2.js') }}"></script>
-    <script src="{{ asset('assets/js/forms-selects.js') }}"></script>
     <script>
         const category = "{{ session('category', 'daily') }}";
         let customItemIndex = 0; // Track custom items
@@ -287,9 +285,12 @@
         }
 
         // Initialize Select2 for customer selection
-        $('#select_customer').select2({
-            placeholder: 'Select Existing Customer',
-            allowClear: true
+        $(function() {
+            $('#select_customer').select2({
+                placeholder: 'Select Existing Customer',
+                allowClear: true,
+                minimumResultsForSearch: 0
+            });
         });
 
         // Handle customer selection changes
@@ -485,6 +486,6 @@
         // Trigger recalculations on input changes
         $('#total_discount, #deposit, #payment_amount, #days').on('input', calculateInvoiceTotal);
     </script>
-
+    @endpush
 
 @endsection

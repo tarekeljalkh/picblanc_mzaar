@@ -7,8 +7,10 @@ use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoicePayment;
 use App\Models\Product;
+use App\Services\InvoicePaymentStatusQuery;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashbboardController extends Controller
@@ -25,74 +27,119 @@ class DashbboardController extends Controller
             abort(404, 'Category not found.');
         }
 
-        // Fetch total counts
-        $customersCount = Customer::count();
-        $invoicesCount = Invoice::where('category_id', $category->id)->count();
+        // The app can switch databases by year, so never share dashboard
+        // metrics between two year's databases.
+        $databaseKey = preg_replace('/[^A-Za-z0-9_.-]/', '_', DB::connection()->getDatabaseName()) ?: 'default';
 
-        // ✅ Load invoices with payments
-        // $invoices = Invoice::where('category_id', $category->id)->with('payments')->get();
-        $invoices = Invoice::where('category_id', $category->id)
-            ->with([
-                'customer',
-                'category',
-                'invoiceItems',
-                'customItems.invoice',          // in case you reference customItem->invoice
-                'additionalItems.invoice',      // same here
-                'payments',
-                'returnDetails.invoiceItem',
-                'returnDetails.additionalItem',
-                'returnDetails.customItem',
-            ])
-            ->where('category_id', $category->id)
-            ->get();
+        // Customers are category-independent, while the remaining dashboard
+        // values are category-specific. Keep the cache short-lived because
+        // payments and returns can change these numbers during the day.
+        $customersCount = Cache::remember(
+            "dashboard.customers.count.{$databaseKey}",
+            now()->addSeconds(10),
+            fn () => Customer::count()
+        );
 
-        // ✅ Use payment_status accessor for accurate classification
-        $totalPaid = $invoices->filter(fn($invoice) => $invoice->payment_status === 'fully_paid')->count();
-        $totalPartiallyPaid = $invoices->filter(fn($invoice) => $invoice->payment_status === 'partially_paid')->count();
-        $totalUnpaid = $invoices->filter(fn($invoice) => $invoice->payment_status === 'unpaid')->count();
+        $dashboardMetrics = Cache::remember(
+            "dashboard.metrics.{$databaseKey}.{$category->id}",
+            now()->addSeconds(5),
+            function () use ($category): array {
+                $invoicesCount = Invoice::where('category_id', $category->id)->count();
+                $statusCounts = app(InvoicePaymentStatusQuery::class)->counts($category->id, $category->name);
 
-        // Not Returned
-        $notReturnedCount = Invoice::where('category_id', $category->id)
-            ->where(function ($query) {
-                $query->whereHas('invoiceItems', fn($q) => $q->whereColumn('quantity', '>', 'returned_quantity'))
-                    ->orWhereHas('additionalItems', fn($q) => $q->whereColumn('quantity', '>', 'returned_quantity'))
-                    ->orWhereHas('customItems', fn($q) => $q->whereColumn('quantity', '>', 'returned_quantity'));
-            })
-            ->distinct()
-            ->count();
+                if ($statusCounts !== null) {
+                    $totalPaid = $statusCounts['fully_paid'];
+                    $totalPartiallyPaid = $statusCounts['partially_paid'];
+                    $totalUnpaid = $statusCounts['unpaid'];
+                    $overdueCount = $statusCounts['overdue'];
+                } else {
+                    $totalPaid = 0;
+                    $totalPartiallyPaid = 0;
+                    $totalUnpaid = 0;
+                    $overdueCount = 0;
+                    $now = now();
 
-        // Returned
-        $returnedCount = Invoice::where('category_id', $category->id)
-            ->whereDoesntHave('invoiceItems', fn($query) => $query->whereColumn('quantity', '>', 'returned_quantity'))
-            ->whereDoesntHave('additionalItems', fn($query) => $query->whereColumn('quantity', '>', 'returned_quantity'))
-            ->whereDoesntHave('customItems', fn($query) => $query->whereColumn('quantity', '>', 'returned_quantity'))
-            ->count();
+                    Invoice::query()
+                        ->where('category_id', $category->id)
+                        ->select(['id', 'category_id', 'total_discount', 'deposit', 'rental_end_date'])
+                        ->with([
+                            'category:id,name',
+                            'invoiceItems:id,invoice_id,price,quantity,rental_start_date,rental_end_date,days',
+                            'customItems:id,invoice_id,price,quantity,rental_start_date,rental_end_date,days',
+                            'additionalItems:id,invoice_id,price,quantity,rental_start_date,rental_end_date,days',
+                            'payments:id,invoice_id,amount',
+                            'returnDetails:id,invoice_id,invoice_item_id,additional_item_id,custom_item_id,days_used',
+                            'returnDetails.invoiceItem:id,price,rental_start_date,rental_end_date,days',
+                            'returnDetails.additionalItem:id,price,rental_start_date,rental_end_date,days',
+                            'returnDetails.customItem:id,price,rental_start_date,rental_end_date,days',
+                        ])
+                        ->chunkById(500, function ($invoices) use (
+                            &$totalPaid,
+                            &$totalPartiallyPaid,
+                            &$totalUnpaid,
+                            &$overdueCount,
+                            $now
+                        ) {
+                            foreach ($invoices as $invoice) {
+                                $paymentStatus = $invoice->payment_status;
 
-        // Overdue Count
-        $overdueCount = $invoices->filter(function ($invoice) {
-            $totals = $invoice->calculateTotals();
-            $paid = round($invoice->payments->sum('amount'), 2);
-            $due = round($totals['finalTotal'] ?? 0, 2);
-            return $invoice->rental_end_date < now() && ($due - $paid) > 1.00;
-        })->count();
+                                if ($paymentStatus === 'fully_paid') {
+                                    $totalPaid++;
+                                } elseif ($paymentStatus === 'partially_paid') {
+                                    $totalPartiallyPaid++;
+                                } elseif ($paymentStatus === 'unpaid') {
+                                    $totalUnpaid++;
+                                }
 
-        // Total revenue
-        $totalRevenue = InvoicePayment::whereHas('invoice', fn($query) => $query->where('category_id', $category->id))->sum('amount');
+                                if ($invoice->rental_end_date < $now && $paymentStatus !== 'fully_paid') {
+                                    $overdueCount++;
+                                }
+                            }
+                        });
+                }
 
-        // Overdue revenue
-        $overdueRevenue = $invoices->sum(function ($invoice) {
-            $totals = $invoice->calculateTotals();
-            $paid = round($invoice->payments->sum('amount'), 2);
-            $due = round($totals['finalTotal'] ?? 0, 2);
-            return max(0, $due - $paid);
-        });
+                // An invoice is not returned when any active item still has
+                // quantity outstanding. Build that ID set once; returned and
+                // not-returned invoices are complements of each other.
+                $unreturnedInvoiceIds = DB::table('invoice_items')
+                    ->select('invoice_id')
+                    ->whereNull('deleted_at')
+                    ->whereColumn('quantity', '>', 'returned_quantity')
+                    ->unionAll(
+                        DB::table('additional_items')
+                            ->select('invoice_id')
+                            ->whereColumn('quantity', '>', 'returned_quantity')
+                    )
+                    ->unionAll(
+                        DB::table('custom_items')
+                            ->select('invoice_id')
+                            ->whereColumn('quantity', '>', 'returned_quantity')
+                    );
 
-        // Paginate latest invoices
-        $invoices = Invoice::with('customer')
-            ->where('category_id', $category->id)
-            ->where('status', '!=', 'returned')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
+                $notReturnedCount = Invoice::where('category_id', $category->id)
+                    ->whereIn('id', $unreturnedInvoiceIds)
+                    ->count();
+                $returnedCount = $invoicesCount - $notReturnedCount;
+
+                $totalRevenue = InvoicePayment::whereHas(
+                    'invoice',
+                    fn($query) => $query->where('category_id', $category->id)
+                )->sum('amount');
+
+                return compact(
+                    'invoicesCount',
+                    'totalPaid',
+                    'totalPartiallyPaid',
+                    'totalUnpaid',
+                    'notReturnedCount',
+                    'returnedCount',
+                    'overdueCount',
+                    'totalRevenue'
+                );
+            }
+        );
+
+        extract($dashboardMetrics, EXTR_OVERWRITE);
 
         return view('dashboard', compact(
             'customersCount',
@@ -104,8 +151,6 @@ class DashbboardController extends Controller
             'returnedCount',
             'overdueCount',
             'totalRevenue',
-            'overdueRevenue',
-            'invoices',
             'categoryName'
         ));
     }
@@ -117,16 +162,21 @@ class DashbboardController extends Controller
         $isAdmin = $user->role === 'admin';
         $selectedCategory = session('category', 'daily');
 
-        $fromDate = $request->input('from_date', Carbon::today()->toDateString());
-        $toDate = $request->input('to_date', Carbon::today()->toDateString());
+        $dateFilters = $request->validate([
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+        ]);
+        $fromDate = $dateFilters['from_date'] ?? Carbon::today()->toDateString();
+        $toDate = $dateFilters['to_date'] ?? Carbon::today()->toDateString();
 
         $from = Carbon::parse($fromDate)->startOfDay();
         $to = Carbon::parse($toDate)->endOfDay();
+        $category = Category::where('name', $selectedCategory)->firstOrFail();
 
         // 🧾 Sum all payments grouped by method (using payment_date)
         $paymentSums = InvoicePayment::whereBetween('payment_date', [$from, $to])
-            ->whereHas('invoice', function ($query) use ($selectedCategory, $isAdmin, $user) {
-                $query->whereHas('category', fn($q) => $q->where('name', $selectedCategory));
+            ->whereHas('invoice', function ($query) use ($category, $isAdmin, $user) {
+                $query->where('category_id', $category->id);
                 if (!$isAdmin) {
                     $query->where('user_id', $user->id);
                 }
@@ -138,21 +188,54 @@ class DashbboardController extends Controller
         $totalPaidByCash = $paymentSums['cash'] ?? 0;
         $totalPaidByCreditCard = $paymentSums['credit_card'] ?? 0;
 
-        // 🧮 Unpaid balances
-        $invoices = Invoice::with(['payments', 'category', 'invoiceItems', 'customItems', 'additionalItems', 'returnDetails'])
-            ->whereHas('category', fn($q) => $q->where('name', $selectedCategory))
-            ->when(!$isAdmin, fn($q) => $q->where('user_id', $user->id))
-            ->get();
-
-        $totalUnpaidInvoices = 0;
-
-        foreach ($invoices as $invoice) {
-            $totals = $invoice->calculateTotals();
-            $balanceDue = $totals['balanceDue'] ?? 0;
-
-            if ($balanceDue > 0) {
-                $totalUnpaidInvoices += $balanceDue;
+        // 🧮 Sum unpaid balances in SQL, applying the same date-range rules as
+        // the original trial-balance calculation without loading every invoice.
+        $invoiceDateFilter = function ($query) use ($selectedCategory, $from, $to): void {
+            if ($selectedCategory === 'season') {
+                $query->whereBetween('created_at', [$from, $to]);
+                return;
             }
+
+            $query->where(function ($dateQuery) use ($from, $to): void {
+                $dateQuery->whereBetween('rental_start_date', [$from, $to])
+                    ->orWhereBetween('rental_end_date', [$from, $to])
+                    ->orWhere(function ($overlappingQuery) use ($from, $to): void {
+                        $overlappingQuery
+                            ->where('rental_start_date', '<=', $from)
+                            ->where('rental_end_date', '>=', $to);
+                    });
+            });
+        };
+
+        $totalUnpaidInvoices = app(InvoicePaymentStatusQuery::class)->unpaidBalanceSum(
+            $category->id,
+            $selectedCategory,
+            $isAdmin ? null : $user->id,
+            $invoiceDateFilter
+        );
+
+        // Keep a chunked fallback for non-MySQL installations.
+        if ($totalUnpaidInvoices === null) {
+            $totalUnpaidInvoices = 0;
+            $invoiceQuery = Invoice::with([
+                'payments',
+                'category',
+                'invoiceItems',
+                'customItems',
+                'additionalItems',
+                'returnDetails.invoiceItem',
+                'returnDetails.additionalItem',
+                'returnDetails.customItem',
+            ])
+                ->where('category_id', $category->id)
+                ->when(!$isAdmin, fn ($query) => $query->where('user_id', $user->id));
+
+            $invoiceDateFilter($invoiceQuery);
+            $invoiceQuery->chunkById(500, function ($invoices) use (&$totalUnpaidInvoices): void {
+                foreach ($invoices as $invoice) {
+                    $totalUnpaidInvoices += max(0, $invoice->calculateTotals()['balanceDue'] ?? 0);
+                }
+            });
         }
 
         // ✅ Final data
@@ -250,8 +333,12 @@ class DashbboardController extends Controller
         $user = auth()->user(); // Get the authenticated user
 
         // Set default "from" and "to" dates to today if not provided
-        $fromDate = $request->input('from_date', Carbon::today()->toDateString());
-        $toDate = $request->input('to_date', Carbon::today()->toDateString());
+        $dateFilters = $request->validate([
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+        ]);
+        $fromDate = $dateFilters['from_date'] ?? Carbon::today()->toDateString();
+        $toDate = $dateFilters['to_date'] ?? Carbon::today()->toDateString();
 
         // Parse the dates using Carbon
         $from = Carbon::parse($fromDate)->startOfDay();
@@ -318,6 +405,7 @@ class DashbboardController extends Controller
 
         // Fetch invoices that contain custom items within the date range
         $invoices = Invoice::where('category_id', $category->id)
+            ->when($user->role !== 'admin', fn($query) => $query->where('user_id', $user->id))
             ->where(function ($query) use ($from, $to, $isSeasonal) {
                 if ($isSeasonal) {
                     $query->whereBetween('created_at', [$from, $to]);

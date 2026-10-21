@@ -50,7 +50,7 @@
                   <label class="form-label" for="password">Password</label>
                   <div class="input-group input-group-merge">
                     <input type="password" id="password" class="form-control" name="password" placeholder="&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;" required />
-                    <span class="input-group-text cursor-pointer"><i class="bx bx-hide"></i></span>
+                  <span class="input-group-text cursor-pointer" data-password-toggle role="button" tabindex="0" aria-label="Show password"><i class="bx bx-hide"></i></span>
                   </div>
                   @error('password')
                     <span class="text-danger">{{ $message }}</span>
