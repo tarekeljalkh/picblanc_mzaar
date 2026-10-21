@@ -2,13 +2,16 @@
 setlocal
 cd /d "%~dp0"
 
-echo Fetching latest main...
-git fetch origin main
+echo Fetching latest master...
+git fetch origin master
 if errorlevel 1 goto failed
 
 echo Updating client files...
-git checkout -f -B main origin/main
+git checkout -f -B master origin/master
 if errorlevel 1 goto failed
+
+echo Clearing Laravel cache...
+php artisan optimize:clear
 
 echo Client updated successfully.
 pause
