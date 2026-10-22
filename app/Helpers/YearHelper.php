@@ -11,13 +11,13 @@ if (!function_exists('getAvailableYears')) {
         }
 
         return Cache::remember('available_year_databases', now()->addMinutes(5), function (): array {
-            $databases = DB::select("SHOW DATABASES LIKE 'picblanc_mayrouba_%'");
+            $databases = DB::select("SHOW DATABASES LIKE 'picblanc_mzaar_%'");
 
             $years = [];
 
             foreach ($databases as $db) {
                 $name = array_values((array) $db)[0];
-                $year = str_replace('picblanc_mayrouba_', '', $name);
+                $year = str_replace('picblanc_mzaar_', '', $name);
 
                 if (is_numeric($year)) {
                     $years[] = (int) $year;

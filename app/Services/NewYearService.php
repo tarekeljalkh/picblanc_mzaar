@@ -11,7 +11,7 @@ class NewYearService
 
     public function __construct()
     {
-        $this->prefix    = env('DB_YEAR_PREFIX', 'picblanc_mayrouba_');
+        $this->prefix    = env('DB_YEAR_PREFIX', 'picblanc_mzaar_');
         $this->currentDb = $this->prefix . env('DB_YEAR_ACTIVE');
     }
 
