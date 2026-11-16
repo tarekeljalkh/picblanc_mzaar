@@ -269,9 +269,9 @@
             <div class="footer-text center">
                 <p>I declare having received the merchandise in good condition and I agree to return it on time.</p>
                 <p>I will reimburse the value of any missing or damaged article.</p>
-                <p>Mzaar Intercontinental Hotel - Tel: 71715612</p>
+                <p>Mzaar Intercontinental Hotel - Tel: 71788733</p>
                 <p>Warde - Tel: 70100015</p>
-                <p>Mayrouba - Tel: 71721236</p>
+                <p>Mayrouba - Tel: 03788733</p>
             </div>
 
         </div>
