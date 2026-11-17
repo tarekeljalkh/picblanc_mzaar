@@ -3,7 +3,7 @@
 
 
 
-<nav class="layout-navbar container-xxl navbar navbar-expand-xl navbar-detached align-items-center bg-navbar-theme"
+<nav class="layout-navbar container-xxl navbar navbar-expand-lg navbar-detached align-items-center bg-navbar-theme"
     id="layout-navbar">
 
 
@@ -16,7 +16,7 @@
 
 
 
-    <div class="layout-menu-toggle navbar-nav align-items-xl-center me-4 me-xl-0   d-xl-none ">
+    <div class="layout-menu-toggle navbar-nav align-items-lg-center me-4 me-lg-0   d-xl-none ">
         <a class="nav-item nav-link px-0 me-xl-6" href="javascript:void(0)">
             <i class="bx bx-menu bx-md"></i>
         </a>

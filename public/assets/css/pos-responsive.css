@@ -1,0 +1,154 @@
+/* Keep the application usable on POS screens with Windows display scaling enabled.
+   The vendor layout switches the sidebar to an off-canvas menu below 1200px.
+   POS screens still have enough room for the full navigation from 768px upward. */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    .pos-layout .layout-menu-fixed .layout-menu,
+    .pos-layout .layout-menu-fixed-offcanvas .layout-menu {
+        position: fixed !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        height: 100% !important;
+        margin-right: 0 !important;
+        margin-left: 0 !important;
+        transform: translate3d(0, 0, 0) !important;
+        z-index: 1100;
+    }
+
+    .pos-layout .layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
+    .pos-layout .layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
+        padding-left: 16.25rem;
+    }
+
+    .pos-layout .layout-menu-fixed.layout-menu-flipped:not(.layout-menu-collapsed) .layout-page,
+    .pos-layout .layout-menu-fixed-offcanvas.layout-menu-flipped:not(.layout-menu-collapsed) .layout-page {
+        padding-right: 16.25rem;
+        padding-left: 0;
+    }
+
+    .pos-layout .layout-overlay {
+        display: none !important;
+    }
+
+    .pos-layout .layout-content-navbar .layout-navbar {
+        z-index: 9;
+    }
+
+    .pos-layout .menu-inner-shadow {
+        height: 3rem;
+    }
+}
+
+/* Keep products and checkout side-by-side on POS screens. The controls inside
+   the narrower checkout column stack independently below 1200px. */
+.pos-page {
+    width: 100%;
+    max-width: 100%;
+    padding-right: 0;
+    padding-left: 0;
+}
+
+.pos-page .pos-products,
+.pos-page .pos-cart-panel {
+    min-width: 0;
+}
+
+.pos-customer-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+}
+
+.pos-customer-controls .select2-container {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.pos-customer-controls .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.pos-page .product-card {
+    height: 100%;
+}
+
+.pos-page .product-card .card-body {
+    overflow-wrap: anywhere;
+}
+
+.pos-page .cart-item > .d-flex {
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+.pos-page .cart-item > .d-flex > span {
+    min-width: 0;
+    flex: 1 1 12rem;
+    overflow-wrap: anywhere;
+}
+
+.pos-page .cart-item .form-row .d-flex {
+    gap: .5rem;
+}
+
+.pos-page .cart-item .form-row .col {
+    min-width: 0;
+}
+
+.pos-customer-modal-dialog {
+    width: calc(100% - 2rem);
+    max-width: 42rem;
+    margin-right: auto;
+    margin-left: auto;
+}
+
+.pos-customer-modal-dialog .modal-content {
+    max-height: calc(100vh - 2rem);
+}
+
+.pos-customer-modal-dialog .modal-body {
+    overflow-y: auto;
+}
+
+@media (max-width: 1199.98px) {
+    .pos-customer-controls {
+        flex-direction: column;
+    }
+
+    .pos-customer-controls .select2-container,
+    .pos-customer-controls .btn {
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .pos-page .row {
+        --bs-gutter-x: 1rem;
+    }
+
+    .pos-page .pos-cart-panel {
+        padding-right: 1rem;
+        padding-left: 1rem;
+    }
+
+    .pos-customer-modal-dialog {
+        width: calc(100% - 1rem);
+        margin-top: .5rem;
+        margin-bottom: .5rem;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    [dir="rtl"] .pos-layout .layout-menu-fixed .layout-menu,
+    [dir="rtl"] .pos-layout .layout-menu-fixed-offcanvas .layout-menu {
+        right: 0 !important;
+        left: auto !important;
+    }
+
+    [dir="rtl"] .pos-layout .layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
+    [dir="rtl"] .pos-layout .layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
+        padding-right: 16.25rem;
+        padding-left: 0;
+    }
+}

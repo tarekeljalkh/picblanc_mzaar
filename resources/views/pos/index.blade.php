@@ -8,10 +8,10 @@
 @endpush
 
 @section('content')
-    <div class="container">
-        <div class="row">
+    <div class="container pos-page">
+        <div class="row g-4">
             <!-- Left Column: Products -->
-            <div class="col-md-8">
+            <div class="col-12 col-md-8 pos-products">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <!-- Real-Time Search Input -->
                     <input type="text" id="search-product" class="form-control" placeholder="Search products...">
@@ -20,7 +20,7 @@
                 <!-- Products Grid -->
                 <div class="row" id="product-list">
                     @foreach ($products as $product)
-                        <div class="col-md-3 col-sm-6 col-12 mb-4 product-card-container">
+                        <div class="col-12 col-sm-6 col-lg-4 col-xxl-3 mb-4 product-card-container">
                             <div class="card product-card clickable-card" data-id="{{ $product->id }}"
                                 data-name="{{ $product->name }}" data-price="{{ $product->price }}"
                                 data-type="{{ $product->type }}">
@@ -36,9 +36,9 @@
             </div>
 
             <!-- Right Column: Customer Selection and Cart -->
-            <div class="col-md-4" style="background-color: #ffffff;">
+            <div class="col-12 col-md-4 pos-cart-panel bg-white rounded">
                 <h4 class="my-4">Select Customer</h4>
-                <div class="mb-6 d-flex justify-content-between">
+                <div class="mb-6 pos-customer-controls">
                     <!-- Customer Dropdown with Search -->
                     <select id="customer-select" class="select2 form-select form-select-lg" data-allow-clear="true">
                         <option value="" disabled selected>Select a customer</option>
@@ -56,7 +56,8 @@
                     </select>
 
                     <!-- Button to Create New Customer -->
-                    <button class="btn btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#newCustomerModal">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal"
+                        data-bs-target="#newCustomerModal">
                         Create New Customer
                     </button>
                 </div>
@@ -143,36 +144,39 @@
     <!-- Modal for creating a new customer -->
     <div class="modal fade" id="newCustomerModal" tabindex="-1" aria-labelledby="newCustomerModalLabel"
         aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable pos-customer-modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="newCustomerModalLabel">Create New Customer</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form action="{{ route('pos.store') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('pos.store') }}" method="POST" enctype="multipart/form-data"
+                        class="row g-3">
                         @csrf
-                        <div class="mb-3">
+                        <div class="col-12 col-sm-6">
                             <label for="customer_name" class="form-label">Name</label>
                             <input type="text" class="form-control" id="customer_name" name="name" required>
                         </div>
-                        <div class="mb-3">
+                        <div class="col-12 col-sm-6">
                             <label for="customer_phone" class="form-label">Phone</label>
                             <input type="text" class="form-control" id="customer_phone" name="phone" required>
                         </div>
-                        <div class="mb-3">
+                        <div class="col-12 col-sm-6">
                             <label for="customer_phone2" class="form-label">Second Phone</label>
                             <input type="text" class="form-control" id="customer_phone2" name="phone2">
                         </div>
-                        <div class="mb-3">
+                        <div class="col-12 col-sm-6">
                             <label for="customer_address" class="form-label">Address</label>
                             <input type="text" class="form-control" id="customer_address" name="address">
                         </div>
-                        <div class="mb-3">
+                        <div class="col-12">
                             <label for="deposit_card" class="form-label">Deposit Card</label>
                             <input type="file" class="form-control" id="deposit_card" name="deposit_card">
                         </div>
-                        <button type="submit" class="btn btn-primary">Save Customer</button>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary w-100">Save Customer</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -223,6 +227,7 @@
                 $('#customer-select').select2({
                     placeholder: 'Select A Customer',
                     allowClear: true,
+                    width: '100%',
                 }).on('change', function() {
                     validateCheckoutButton();
                 });
