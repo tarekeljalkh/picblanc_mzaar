@@ -2,8 +2,8 @@
    The vendor layout switches the sidebar to an off-canvas menu below 1200px.
    POS screens still have enough room for the full navigation from 768px upward. */
 @media (min-width: 640px) and (max-width: 1199.98px) {
-    .pos-layout .layout-menu-fixed .layout-menu,
-    .pos-layout .layout-menu-fixed-offcanvas .layout-menu {
+    .pos-layout.layout-menu-fixed .layout-menu,
+    .pos-layout.layout-menu-fixed-offcanvas .layout-menu {
         position: fixed !important;
         top: 0 !important;
         bottom: 0 !important;
@@ -15,13 +15,13 @@
         z-index: 1100;
     }
 
-    .pos-layout .layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
-    .pos-layout .layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
+    .pos-layout.layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
+    .pos-layout.layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
         padding-left: 16.25rem;
     }
 
-    .pos-layout .layout-menu-fixed.layout-menu-flipped:not(.layout-menu-collapsed) .layout-page,
-    .pos-layout .layout-menu-fixed-offcanvas.layout-menu-flipped:not(.layout-menu-collapsed) .layout-page {
+    .pos-layout.layout-menu-fixed.layout-menu-flipped:not(.layout-menu-collapsed) .layout-page,
+    .pos-layout.layout-menu-fixed-offcanvas.layout-menu-flipped:not(.layout-menu-collapsed) .layout-page {
         padding-right: 16.25rem;
         padding-left: 0;
     }
@@ -101,6 +101,44 @@
     min-width: 0;
 }
 
+/* Runtime desktop mode is applied by pos-layout.js. This explicit selector
+   keeps the sidebar visible even when Chrome DevTools emulates a touch device. */
+.pos-layout.pos-desktop-layout.layout-menu-fixed .layout-menu,
+.pos-layout.pos-desktop-layout.layout-menu-fixed-offcanvas .layout-menu {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 100% !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    transform: translate3d(0, 0, 0) !important;
+    z-index: 1100;
+}
+
+.pos-layout.pos-desktop-layout.layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
+.pos-layout.pos-desktop-layout.layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
+    padding-left: 16.25rem;
+}
+
+.pos-layout.pos-desktop-layout .layout-overlay,
+.pos-layout.pos-desktop-layout .layout-navbar .layout-menu-toggle,
+.pos-layout.pos-desktop-layout .layout-menu .layout-menu-toggle {
+    display: none !important;
+}
+
+[dir="rtl"] .pos-layout.pos-desktop-layout.layout-menu-fixed .layout-menu,
+[dir="rtl"] .pos-layout.pos-desktop-layout.layout-menu-fixed-offcanvas .layout-menu {
+    right: 0 !important;
+    left: auto !important;
+}
+
+[dir="rtl"] .pos-layout.pos-desktop-layout.layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
+[dir="rtl"] .pos-layout.pos-desktop-layout.layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
+    padding-right: 16.25rem;
+    padding-left: 0;
+}
+
 .pos-customer-modal-dialog {
     width: calc(100% - 2rem);
     max-width: 42rem;
@@ -145,14 +183,14 @@
 }
 
 @media (min-width: 640px) and (max-width: 1199.98px) {
-    [dir="rtl"] .pos-layout .layout-menu-fixed .layout-menu,
-    [dir="rtl"] .pos-layout .layout-menu-fixed-offcanvas .layout-menu {
+    [dir="rtl"] .pos-layout.layout-menu-fixed .layout-menu,
+    [dir="rtl"] .pos-layout.layout-menu-fixed-offcanvas .layout-menu {
         right: 0 !important;
         left: auto !important;
     }
 
-    [dir="rtl"] .pos-layout .layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
-    [dir="rtl"] .pos-layout .layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
+    [dir="rtl"] .pos-layout.layout-menu-fixed:not(.layout-menu-collapsed) .layout-page,
+    [dir="rtl"] .pos-layout.layout-menu-fixed-offcanvas:not(.layout-menu-collapsed) .layout-page {
         padding-right: 16.25rem;
         padding-left: 0;
     }
