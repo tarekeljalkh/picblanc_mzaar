@@ -114,5 +114,7 @@ let menu, animate;
   // If current layout is vertical and current window screen is > small
 
   // Auto update menu collapsed/expanded based on the themeConfig
-  window.Helpers.setCollapsed(true, false);
+  if (!document.documentElement.classList.contains('pos-layout')) {
+    window.Helpers.setCollapsed(true, false);
+  }
 })();

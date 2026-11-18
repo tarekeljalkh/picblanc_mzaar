@@ -231,6 +231,7 @@
     </script>
 
     <!-- Main JS -->
+    <script src="{{ asset('assets/js/pos-layout.js') }}"></script>
     <script src="{{ asset('assets/js/main.js') }}"></script>
 
     <!-- Page-specific JS -->
