@@ -1,7 +1,7 @@
 /* Keep the application usable on POS screens with Windows display scaling enabled.
    The vendor layout switches the sidebar to an off-canvas menu below 1200px.
    POS screens still have enough room for the full navigation from 768px upward. */
-@media (min-width: 768px) and (max-width: 1199.98px) {
+@media (min-width: 640px) and (pointer: fine) and (max-width: 1199.98px) {
     .pos-layout .layout-menu-fixed .layout-menu,
     .pos-layout .layout-menu-fixed-offcanvas .layout-menu {
         position: fixed !important;
@@ -36,6 +36,11 @@
 
     .pos-layout .menu-inner-shadow {
         height: 3rem;
+    }
+
+    .pos-layout .layout-navbar .layout-menu-toggle,
+    .pos-layout .layout-menu .layout-menu-toggle {
+        display: none !important;
     }
 }
 
@@ -139,7 +144,7 @@
     }
 }
 
-@media (min-width: 768px) and (max-width: 1199.98px) {
+@media (min-width: 640px) and (pointer: fine) and (max-width: 1199.98px) {
     [dir="rtl"] .pos-layout .layout-menu-fixed .layout-menu,
     [dir="rtl"] .pos-layout .layout-menu-fixed-offcanvas .layout-menu {
         right: 0 !important;
